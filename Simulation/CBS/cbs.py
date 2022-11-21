@@ -13,7 +13,7 @@ from math import fabs
 from itertools import combinations
 from copy import deepcopy
 
-from Simulation.CBS.a_star import AStar
+from Simulation.CBS.a_star import AStar, Dijkstra
 #from Simulation.simulation_new_recovery import SimulationNewRecovery
 
 class Location(object):
@@ -31,6 +31,8 @@ class State(object):
         self.location = location
     def __eq__(self, other):
         return self.time == other.time and self.location == other.location
+    def __lt__(self, other):
+        return self.time < other.time
     def __hash__(self):
         return hash(str(self.time)+str(self.location.x) + str(self.location.y))
     def is_equal_except_time(self, state):
@@ -102,6 +104,8 @@ class Environment(object):
         self.moving_obstacles = moving_obstacles
         self.a_star_max_iter = a_star_max_iter
 
+        # TODO @bonaluca: graph ref needed only to pass it to AStar.search()
+        # Could be replaced with weighting function
         self.graph = graph
 
         self.agents = agents
@@ -259,15 +263,17 @@ class Environment(object):
         solution = {}
         for agent in self.agent_dict.keys():
             self.constraints = self.constraint_dict.setdefault(agent, Constraints())
-            path_def = self.a_star.search(agent, self.graph)
-            if path_def != False:
+            #local_solution = self.a_star.search(agent)
+            # TODO @bonaluca: remove this, a_star.search() should return a list of State
+            path_def = self.a_star.search(agent)
+            if path_def != False and not isinstance(path_def[0], State):
                 t = 0
                 local_solution = []
                 for i in path_def:
                     local_solution.append(State(time=t, location=Location(i[0],i[1])))
                     t += 1
             else:
-                local_solution = False
+                local_solution = path_def
             if not local_solution:
                 return False
             solution.update({agent:local_solution})
