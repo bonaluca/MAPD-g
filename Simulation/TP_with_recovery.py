@@ -155,14 +155,14 @@ class TokenPassingRecovery(object):
             if len(path) > time_start and len(path) > 1:
                 for i in range(time_start, len(path)):
                     k = i - time_start
-                    obstacles[(path[i][0], path[i][1], k)] = name
+                    obstacles[(path[i][0], path[i][1], i)] = name
                     for j in range(1, self.k + 1):
                         if i - j >= time_start:
-                            obstacles[(path[i][0], path[i][1], k - j)] = name
-                        obstacles[(path[i][0], path[i][1], k + j)] = name
+                            obstacles[(path[i][0], path[i][1], i - j)] = name
+                        obstacles[(path[i][0], path[i][1], i + j)] = name
                     # Mark last element with negative time to later turn it into idle obstacle
                     if i == len(path) - 1:
-                        obstacles[(path[i][0], path[i][1], -k)] = name
+                        obstacles[(path[i][0], path[i][1], -i)] = name
         return obstacles
 
     def get_idle_obstacles(self, agents_paths, time_start):
@@ -618,9 +618,10 @@ class TokenPassingRecovery(object):
                     #print('path_to_task_start',path_to_task_start)
                     cost1 = env.compute_solution_cost(path_to_task_start)
                     # Use cost - 1 because idle cost is 1
-                    moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], cost1 - 1)
+                    time_start = cost1 - 1
+                    moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], time_start)
                     idle_obstacles_agents = self.get_idle_obstacles(all_idle_agents.values(),
-                                                                        cost1 - 1)
+                                                                        time_start)
                     #print('moving_obstacles_agents PER GOAL1',moving_obstacles_agents)
                     #print('TOKEN',self.token['agents'])
                     agent = {'name': agent_name, 'start': closest_task[0], 'goal': closest_task[1]}
@@ -706,13 +707,14 @@ class TokenPassingRecovery(object):
                     logging.info("Solution found to task start for guest %s searching solution to task goal...", guest_name)
                     #print('path_to_task_start',path_to_task_start)
                     cost1 = env.compute_solution_cost(path_to_task_start)
+                    time_start = cost1 - 1
                     # Use cost - 1 because idle cost is 1
-                    moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], cost1 - 1)
+                    moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], time_start)
                     idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(),
-                                                                        cost1 - 1)
+                                                                        time_start)
                     guest = {'name': guest_name, 'start': closest_task[0], 'goal': closest_task[1]}
                     env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
-                                    moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter,
+                                    moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter, time_start=time_start,
                                     graph=self.simulation.get_graph_guests(),
                                     weight_function=self.simulation.weight_function,
                                     occupancy_model=self.simulation.occupancy_model)

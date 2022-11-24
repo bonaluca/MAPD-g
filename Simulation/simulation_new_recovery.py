@@ -283,15 +283,17 @@ class SimulationNewRecovery(object):
                 #we first replan a path from the new location to the pick-up point
                 all_idle_guests = algorithm.get_token()['guests'].copy()
                 all_idle_guests.pop(guest['name'])
-                moving_obstacles_guests = algorithm.get_moving_obstacles(all_idle_guests, 1)
+                time_start = 1
+                moving_obstacles_guests = algorithm.get_moving_obstacles(all_idle_guests, time_start)
                 #print(moving_obstacles_guests)
                 #print('moving_obstacles_guests PER START1',moving_obstacles_guests)
                 #print('TOKEN',algorithm.get_token()['guests'])
-                idle_obstacles_guests = algorithm.get_idle_obstacles(all_idle_guests.values(), 1)
+                idle_obstacles_guests = algorithm.get_idle_obstacles(all_idle_guests.values(), time_start)
                 #print('idle obstacle guests', idle_obstacles_guests)
                 guest = {'name': guest['name'], 'start': [x_new, y_new], 'goal': task['start']}
                 env = DynamicEnvironment(dimensions, [guest], set(obstacles_guests) | idle_obstacles_guests,
                                 moving_obstacles_guests, a_star_max_iter, self.get_graph_guests(),
+                                time_start=time_start,
                                 weight_function=self.weight_function,
                                 occupancy_model=self.occupancy_model)
                 cbs = CBS(env)
@@ -314,6 +316,7 @@ class SimulationNewRecovery(object):
                 guest = {'name': guest['name'], 'start': task['start'], 'goal':task['goal']}
                 env = DynamicEnvironment(dimensions, [guest], set(obstacles_guests) | idle_obstacles_guests,
                                 moving_obstacles_guests, a_star_max_iter, self.get_graph_guests(),
+                                time_start=time_start,
                                 weight_function=self.weight_function,
                                 occupancy_model=self.occupancy_model)
                 cbs = CBS(env)
@@ -343,13 +346,14 @@ class SimulationNewRecovery(object):
                 task = algorithm.get_token()['guests_to_tasks'][guest['name']]
                 all_idle_guests = algorithm.get_token()['guests'].copy()
                 all_idle_guests.pop(guest['name'])
-                moving_obstacles_guests = algorithm.get_moving_obstacles(all_idle_guests, 1)
-                idle_obstacles_guests = algorithm.get_idle_obstacles(all_idle_guests.values(), 1)
+                time_start = 1
+                moving_obstacles_guests = algorithm.get_moving_obstacles(all_idle_guests, time_start)
+                idle_obstacles_guests = algorithm.get_idle_obstacles(all_idle_guests.values(), time_start)
                 #print('moving_obstacles_agents PER START1',moving_obstacles_agents)
                 #print('TOKEN',self.token['agents'])
                 guest = {'name': guest['name'], 'start': [x_new, y_new], 'goal': task['goal']}
                 env = DynamicEnvironment(algorithm.dimensions, [guest], algorithm.obstacles_guests | idle_obstacles_guests,
-                    moving_obstacles_guests, a_star_max_iter=algorithm.a_star_max_iter,
+                    moving_obstacles_guests, a_star_max_iter=algorithm.a_star_max_iter, time_start=time_start,
                     graph=self.get_graph_guests(),
                     weight_function=self.weight_function,
                     occupancy_model=self.occupancy_model)

@@ -96,13 +96,14 @@ class Constraints(object):
             "EC: " + str([str(ec) for ec in self.edge_constraints])
 
 class Environment(object):
-    def __init__(self, dimension, agents, obstacles, moving_obstacles=None, a_star_max_iter=-1, graph=None):
+    def __init__(self, dimension, agents, obstacles, moving_obstacles=None, a_star_max_iter=-1, graph=None, time_start=0):
         if moving_obstacles is None:
             moving_obstacles = []
         self.dimension = dimension
         self.obstacles = obstacles
         self.moving_obstacles = moving_obstacles
         self.a_star_max_iter = a_star_max_iter
+        self.time_start = time_start
 
         # TODO @bonaluca: graph ref needed only to pass it to AStar.search()
         # Could be replaced with weighting function
@@ -154,7 +155,7 @@ class Environment(object):
                 state_1 = self.get_state(agent_1, solution, t)
                 state_2 = self.get_state(agent_2, solution, t)
                 if state_1.is_equal_except_time(state_2):
-                    result.time = t
+                    result.time = state_1.time
                     result.type = Conflict.VERTEX
                     result.location_1 = state_1.location
                     result.agent_1 = agent_1
@@ -169,7 +170,7 @@ class Environment(object):
                 state_2b = self.get_state(agent_2, solution, t+1)
 
                 if state_1a.is_equal_except_time(state_2b) and state_1b.is_equal_except_time(state_2a):
-                    result.time = t
+                    result.time = state_1a.time
                     result.type = Conflict.EDGE
                     result.agent_1 = agent_1
                     result.agent_2 = agent_2
@@ -254,8 +255,8 @@ class Environment(object):
 
     def make_agent_dict(self):
         for agent in self.agents:
-            start_state = State(0, Location(agent['start'][0], agent['start'][1]))
-            goal_state = State(0, Location(agent['goal'][0], agent['goal'][1]))
+            start_state = State(self.time_start, Location(*agent['start']))
+            goal_state = State(self.time_start, Location(*agent['goal']))
 
             self.agent_dict.update({agent['name']:{'start':start_state, 'goal':goal_state}})
 
@@ -286,8 +287,8 @@ class DynamicEnvironment(Environment):
     """Environment with occupancy model"""
 
     def __init__(self, dimension, agents, obstacles, moving_obstacles=None, a_star_max_iter=-1,
-    graph=None, weight_function=None, occupancy_model=None):
-        super().__init__(dimension, agents, obstacles, moving_obstacles, a_star_max_iter, graph)
+    graph=None, time_start=0, weight_function=None, occupancy_model=None):
+        super().__init__(dimension, agents, obstacles, moving_obstacles, a_star_max_iter, graph, time_start)
 
         self.weight_function = weight_function
         self.occupancy_model = occupancy_model

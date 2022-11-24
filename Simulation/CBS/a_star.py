@@ -20,6 +20,7 @@ class AStar:
         self.get_neighbors = env.get_neighbors
         self.max_iter = env.a_star_max_iter
         self.iter = 0
+        self.time_start = env.time_start
 
     def reconstruct_path(self, predecessors, current):
         total_path = [current]
@@ -160,7 +161,7 @@ class AStar:
         index = count(0)
         #heapq.heappush(heap, (f_score[initial_state], h1_score, next(index), initial_state))
 
-        source = (0, initial_state.location.x, initial_state.location.y)
+        source = (self.time_start, initial_state.location.x, initial_state.location.y)
         target=(self.agent_dict[agent_name]["goal"].location.x,self.agent_dict[agent_name]["goal"].location.y)
 
 
