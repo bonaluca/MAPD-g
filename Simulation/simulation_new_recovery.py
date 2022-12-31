@@ -94,6 +94,10 @@ class SimulationNewRecovery(object):
             logging.debug(self.G_agents)
             logging.debug('Graph diameter: %s' % diam_g)
 
+#            # Weight function that balances distance and probability of occupancy
+#            self.weight_function = lambda dist, prob_occ: \
+#                1 / max((1 - prob_occ) ** (self.alpha), 5e-4)
+
             # Weight function that balances distance and probability of occupancy
             if self.alpha != 1:
                 self.weight_function = lambda dist, prob_occ: \
