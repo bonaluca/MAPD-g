@@ -482,12 +482,12 @@ class TokenPassingRecovery(object):
 
     @property
     def free_guests(self):
-        return [guest for guest in self.guests \
+        return [guest['name'] for guest in self.guests \
             if len(self.token['guests'][guest['name']]) == 1]
 
     @property
     def occupied_guests(self):
-        return [guest for guest in self.guests \
+        return [guest['name'] for guest in self.guests \
             if len(self.token['guests'][guest['name']]) > 1]
 
     def current_pos_agents(self, agent_name):
@@ -519,6 +519,13 @@ class TokenPassingRecovery(object):
         return set([
             agent['name'] for agent in self.agents
             if self.current_pos_agents(agent['name']) in self.surroundings(guest_name)
+        ])
+
+    def guests_nearby(self, guest_name):
+        return set([
+            guest['name'] for guest in self.guests
+            if guest['name'] != guest_name and \
+                self.current_pos_guests(guest['name'] in self.surroundings(guest_name))
         ])
 
     def time_forward(self):

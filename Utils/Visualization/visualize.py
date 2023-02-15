@@ -19,12 +19,13 @@ Colors = ['orange', 'blue', 'orange', 'red']
 
 
 class Animation:
-    def __init__(self, map, schedule, slow_factor=10, alpha = 0, map_name=None):
+    def __init__(self, map, schedule, slow_factor=10, alpha = 0, map_name=None, deadlock=None):
         self.map = map
         self.schedule = schedule
         self.slow_factor = slow_factor
         self.alpha = alpha
         self.map_name = map_name
+        self.deadlock = deadlock
         self.combined_schedule = {}
         self.combined_schedule.update(self.schedule["schedule"])
 
@@ -149,7 +150,7 @@ class Animation:
         self.anim.save(
             file_name,
             "ffmpeg",
-            fps=10 * speed,
+            fps=20 * speed,
             dpi=200),
         # savefig_kwargs={"pad_inches": 0, "bbox_inches": "tight"})
 
@@ -188,21 +189,28 @@ class Animation:
 
         # Make tasks visible at the right time
         for t in map["tasks"]:
-            if t['start_time'] <= i / self.slow_factor + 1 <= self.schedule['completed_tasks_times'][t['task_name']]:
-                self.tasks[t['task_name']][0].set_alpha(0.5)
-                self.tasks[t['task_name']][1].set_alpha(0.5)
-            else:
-                self.tasks[t['task_name']][0].set_alpha(0)
-                self.tasks[t['task_name']][1].set_alpha(0)
+            try:
+                if t['start_time'] <= i / self.slow_factor + 1 <= self.schedule['completed_tasks_times'][t['task_name']]:
+                    self.tasks[t['task_name']][0].set_alpha(0.5)
+                    self.tasks[t['task_name']][1].set_alpha(0.5)
+                else:
+                    self.tasks[t['task_name']][0].set_alpha(0)
+                    self.tasks[t['task_name']][1].set_alpha(0)
+            except:
+                continue
+
 
         # Make guest tasks visible at the right time
         for t in map["tasks_guest"]:
-            if t['start_time'] <= i / self.slow_factor + 1 <= self.schedule['completed_tasks_times_guest'][t['task_name']]:
-                self.tasks_guest[t['task_name']][0].set_alpha(0.5)
-                self.tasks_guest[t['task_name']][1].set_alpha(0.5)
-            else:
-                self.tasks_guest[t['task_name']][0].set_alpha(0)
-                self.tasks_guest[t['task_name']][1].set_alpha(0)
+            try:
+                if t['start_time'] <= i / self.slow_factor + 1 <= self.schedule['completed_tasks_times_guest'][t['task_name']]:
+                    self.tasks_guest[t['task_name']][0].set_alpha(0.5)
+                    self.tasks_guest[t['task_name']][1].set_alpha(0.5)
+                else:
+                    self.tasks_guest[t['task_name']][0].set_alpha(0)
+                    self.tasks_guest[t['task_name']][1].set_alpha(0)
+            except:
+                continue
 
         # Check drive-drive collisions agents
         agents_array = [agent for _, agent in self.agents.items()]
@@ -213,8 +221,8 @@ class Animation:
                 pos1 = np.array(d1.center)
                 pos2 = np.array(d2.center)
                 if np.linalg.norm(pos1 - pos2) < 0.7:
-                    d1.set_facecolor('red')
-                    d2.set_facecolor('red')
+                    d1.set_facecolor('blue')
+                    d2.set_facecolor('blue')
                     print("COLLISION! (agent-agent) ({}, {})".format(j, k))
 
         # Check drive-drive collisions guests
@@ -230,18 +238,19 @@ class Animation:
                     d2.set_facecolor('blue')
                     print("COLLISION! (guest-guest) ({}, {})".format(j, k))
 
-        # Check drive-drive collisions guests
+        # Check drive-drive collisions agent-guest
         guests_array = [guest for _, guest in self.guests.items()]
+        agents_array = [agent for _, agent in self.agents.items()]
         for i in range(0, len(guests_array)):
-            for j in range(i + 1, len(guests_array)):
+            for j in range(0, len(agents_array)):
                 d1 = guests_array[i]
-                d2 = guests_array[j]
+                d2 = agents_array[j]
                 pos1 = np.array(d1.center)
                 pos2 = np.array(d2.center)
                 if np.linalg.norm(pos1 - pos2) < 0.7:
                     d1.set_facecolor('blue')
                     d2.set_facecolor('blue')
-                    print("COLLISION! (guest-guest) ({}, {})".format(i, j), i, j)
+                    print("COLLISION! (guest-agent) ({}, {})".format(i, j))
 
         return self.patches + self.artists
 
@@ -272,15 +281,17 @@ if __name__ == "__main__":
     parser.add_argument('--video', dest='video', default=None,
                         help="output video file (or leave empty to show on screen)")
     parser.add_argument("--speed", type=int, default=1, help="speedup-factor")
+    parser.add_argument('-deadlock', help='Presence of deadlock')
     args = parser.parse_args()
 
     if args.map is None:
         with open(os.path.join(RoothPath.get_root(), 'config.json'), 'r') as json_file:
             config = json.load(json_file)
         args.map = os.path.join(RoothPath.get_root(), os.path.join(config['input_path'], str(args.map_name) + config['visual_postfix'],))
-
-    if args.schedule is None:
-        args.schedule = os.path.join(RoothPath.get_root(), 'output', str(args.alpha)+'-'+str(args.map_name))
+        if args.deadlock == str(True):
+            args.schedule = os.path.join(RoothPath.get_root(), 'output', str(args.alpha)+'-DL-'+str(args.map_name))
+        if args.deadlock == str(False):
+            args.schedule = os.path.join(RoothPath.get_root(), 'output', str(args.alpha)+'-'+str(args.map_name))
 
     with open(args.map) as map_file:
         map = yaml.load(map_file, Loader=yaml.FullLoader)

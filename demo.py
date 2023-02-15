@@ -102,84 +102,131 @@ if __name__ == '__main__':
         # TODO @bonaluca: never true if observation_time = 0
         if simulation.time == observation_time - 1:
             occupancy_model.fit(simulation.actual_paths)
-        simulation.time_forward(tp, dimensions, non_task_endpoints_guests, obstacles, obstacles_agents, obstacles_guests, a_star_max_iter,observation_time)
+        simulation.time_forward(tp, dimensions, non_task_endpoints_guests, obstacles, obstacles_agents, obstacles_guests, a_star_max_iter)
+
+        if simulation.deadlock == True:
+            #logging.error('Deadlock')
+            break
 
         if simulation.time == 3000:
             logging.warning('Simulation timeout elapsed')
             break
 
-    # Computation of the whole cost
-    cost = 0
-    for path in simulation.actual_paths.values():
-        cost = cost + len(path)
-    cost_guests = 0
-    for path_guest in simulation.actual_paths_guests.values():
-        cost_guests = cost_guests + len(path_guest)
+    if simulation.deadlock == False:
 
-    # Computation of the number of conflicts occurred
-    schedule = {**simulation.actual_paths, **simulation.actual_paths_guests}
-    # schedule è una tupla che contiene un dizionario; ogni dizionario contiene una lista di dizionari
+        # Computation of the whole cost
+        cost = 0
+        for path in simulation.actual_paths.values():
+            cost = cost + len(path)
+        cost_guests = 0
+        for path_guest in simulation.actual_paths_guests.values():
+            cost_guests = cost_guests + len(path_guest)
 
-    schedule_guests = simulation.actual_paths_guests, 
-    schedule_agents = simulation.actual_paths, 
+        # Computation of the number of conflicts occurred
+        schedule = {**simulation.actual_paths, **simulation.actual_paths_guests}
+        # schedule è una tupla che contiene un dizionario; ogni dizionario contiene una lista di dizionari
 
-    conflicts = []
-    for agent in schedule_agents[0]:
+        schedule_guests = simulation.actual_paths_guests,
+        schedule_agents = simulation.actual_paths,
+
+        conflicts = []
+        for agent in schedule_agents[0]:
+            for guest in schedule_guests[0]:
+                conflicts = conflicts + [x for x in schedule_agents[0][agent] if x in schedule_guests[0][guest]]
+        n_conflicts = len(conflicts)
+
+
+        timespan = 0
+        for task in tasks_guest:
+            timespan += tp.get_completed_tasks_times_guest()[task['task_name']] - task['start_time']
+        timespan = timespan/len(tasks_guest)
+
+        execution_time_tasks = 0
+        for task in tasks_guest:
+            execution_time_tasks += tp.get_completed_tasks_times_guest()[task['task_name']] - tp.get_assigned_tasks_times_guest()[task['task_name']]
+        execution_time_tasks = execution_time_tasks/len(tasks_guest)
+
+        team_cost = max(tp.get_completed_tasks_times().values()) - min([time for time in simulation.start_times if time > observation_time])
+        team_cost_guest = max(tp.get_completed_tasks_times_guest().values()) - min(simulation.start_times_guests)
+
+        #print(schedule_guests)
+
+        counter_moves_guests = {}
         for guest in schedule_guests[0]:
-            conflicts = conflicts + [x for x in schedule_agents[0][agent] if x in schedule_guests[0][guest]]
-    n_conflicts = len(conflicts)
+            counter_moves_guests[guest] = 0
+            for i in range(len(schedule_guests[0][guest])-1):
+                if schedule_guests[0][guest][i]['x'] != schedule_guests[0][guest][i+1]['x'] or schedule_guests[0][guest][i]['y'] != schedule_guests[0][guest][i+1]['y']:
+                    counter_moves_guests[guest] += 1
+
+        counter_moves = {}
+        for agent in schedule_agents[0]:
+            counter_moves[agent] = 0
+            for i in range(len(schedule_agents[0][agent])-1):
+                if schedule_agents[0][agent][i]['x'] != schedule_agents[0][agent][i+1]['x'] or schedule_agents[0][agent][i]['y'] != schedule_agents[0][agent][i+1]['y']:
+                    counter_moves[agent] += 1
 
 
-    timespan = 0
-    for task in tasks_guest:
-        timespan += tp.get_completed_tasks_times_guest()[task['task_name']] - task['start_time']
-    timespan = timespan/len(tasks_guest)
-
-    execution_time_tasks = 0
-    for task in tasks_guest:
-        execution_time_tasks += tp.get_completed_tasks_times_guest()[task['task_name']] - tp.get_assigned_tasks_times_guest()[task['task_name']]
-    execution_time_tasks = execution_time_tasks/len(tasks_guest)
+        output = {'schedule': schedule,
+                'cost_residentials': cost,
+                'cost_guests':cost_guests,
+                'n_team_cost': team_cost,
+                'n_team_cost_guest':team_cost_guest,
+                'completed_tasks_times': tp.get_completed_tasks_times(),
+                'assigned_tasks_times_guest': tp.get_assigned_tasks_times_guest(),
+                'completed_tasks_times_guest': tp.get_completed_tasks_times_guest(),
+                'conflicts': conflicts,
+                'prob_mat': occupancy_model.get_prob_matrix_90deg(),
+                'n_conflicts': n_conflicts,
+                'n_timespan': timespan,
+                'execution_time_tasks': execution_time_tasks,
+                'n_replanning_guest': simulation.get_n_replanning_guest(),
+                'count_moves_guests': counter_moves_guests,
+                'count_moves_agents': counter_moves,
+                'n_replans': tp.get_n_replans()}
+        with open(args.output, 'w') as output_yaml:
+            yaml.safe_dump(output, output_yaml)
 
     
-    team_cost = max(tp.get_completed_tasks_times().values()) - min([time for time in simulation.start_times if time > observation_time])
-    team_cost_guest = max(tp.get_completed_tasks_times_guest().values()) - min(simulation.start_times_guests)
+    if simulation.deadlock == True:
+        args.output = os.path.join(RoothPath.get_root(), 'output', str(args.alpha)+'-DL-'+str(args.map_name))
 
-    #print(schedule_guests)
+        schedule = {**simulation.actual_paths, **simulation.actual_paths_guests}
 
-    counter_moves_guests = {}
-    for guest in schedule_guests[0]:
-        counter_moves_guests[guest] = 0
-        for i in range(len(schedule_guests[0][guest])-1):
-            if schedule_guests[0][guest][i]['x'] != schedule_guests[0][guest][i+1]['x'] or schedule_guests[0][guest][i]['y'] != schedule_guests[0][guest][i+1]['y']:
-                counter_moves_guests[guest] += 1
+        schedule_guests = simulation.actual_paths_guests,
+        schedule_agents = simulation.actual_paths,
 
-    counter_moves = {}
-    for agent in schedule_agents[0]:
-        counter_moves[agent] = 0
-        for i in range(len(schedule_agents[0][agent])-1):
-            if schedule_agents[0][agent][i]['x'] != schedule_agents[0][agent][i+1]['x'] or schedule_agents[0][agent][i]['y'] != schedule_agents[0][agent][i+1]['y']:
-                counter_moves[agent] += 1
+        conflicts = []
+        for agent in schedule_agents[0]:
+            for guest in schedule_guests[0]:
+                conflicts = conflicts + [x for x in schedule_agents[0][agent] if x in schedule_guests[0][guest]]
+        n_conflicts = len(conflicts)
 
+        output = {'schedule': schedule,
+        #'cost_residentials': cost,
+        #'cost_guests':cost_guests,
+        #'n_team_cost': team_cost,
+        #'n_team_cost_guest':team_cost_guest,
+        'completed_tasks_times': tp.get_completed_tasks_times(),
+        'assigned_tasks_times_guest': tp.get_assigned_tasks_times_guest(),
+        'completed_tasks_times_guest': tp.get_completed_tasks_times_guest(),
+        'conflicts': conflicts,
+        'guest_involved': simulation.guest_presence,
+        'deadlock_task': simulation.deadlock_task,
+        'deadlock_guest': simulation.deadlock_guest,
+        #'prob_mat': occupancy_model.get_prob_matrix_90deg(),
+        'n_conflicts': n_conflicts,
+        #'n_timespan': timespan,
+        #'execution_time_tasks': execution_time_tasks,
+        'n_replanning_guest': simulation.get_n_replanning_guest(),
+        #'count_moves_guests': counter_moves_guests,
+        #'count_moves_agents': counter_moves,
+        #'n_replans': tp.get_n_replans()
+        }
+        with open(args.output, 'w') as output_yaml:
+            yaml.safe_dump(output, output_yaml)
 
-    output = {'schedule': schedule,   
-              'cost_residentials': cost,
-              'cost_guests':cost_guests,
-              'n_team_cost': team_cost,
-              'n_team_cost_guest':team_cost_guest,
-              'completed_tasks_times': tp.get_completed_tasks_times(),
-              'assigned_tasks_times_guest': tp.get_assigned_tasks_times_guest(),
-              'completed_tasks_times_guest': tp.get_completed_tasks_times_guest(),
-              'conflicts': conflicts,
-              'prob_mat': occupancy_model.get_prob_matrix_90deg(),
-              'n_conflicts': n_conflicts,
-              'n_timespan': timespan,
-              'execution_time_tasks': execution_time_tasks,
-              'n_replanning_guest': simulation.get_n_replanning_guest(),
-              'count_moves_guests': counter_moves_guests,
-              'count_moves_agents': counter_moves,
-              'n_replans': tp.get_n_replans()}
-    with open(args.output, 'w') as output_yaml:
-        yaml.safe_dump(output, output_yaml)
+        exit(1)
 
-    #create = [sys.executable, '-m', 'Utils.Visualization.visualize', '-slow_factor', str(args.slow_factor), '-alpha',str(args.alpha),'-map_name',str(args.map_name)]
-    #subprocess.call(create)
+#    create = [sys.executable, '-m', 'Utils.Visualization.visualize', '-slow_factor', str(args.slow_factor), '-alpha',str(args.alpha),'-map_name',str(args.map_name), '-deadlock', str(simulation.deadlock)]
+#    subprocess.call(create)
+
