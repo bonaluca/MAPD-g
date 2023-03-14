@@ -4,10 +4,7 @@ import random
 from math import fabs
 import networkx as nx
 from Simulation.CBS.cbs import CBS, DynamicEnvironment
-from Simulation.occupancy_model import NotFittedError
-
-class PathNotFoundError(ValueError):
-    """Exception class to raise if path not found."""
+from Simulation.exceptions import NotFittedError, PathNotFoundError
 
 class SimulationNewRecovery(object):
     random.seed(1234)

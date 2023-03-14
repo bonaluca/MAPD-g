@@ -3,9 +3,7 @@ import logging
 import re
 from itertools import product
 from scipy import sparse
-
-class NotFittedError(ValueError):
-    """Exception class to raise if model is used before fitting."""
+from Simulation.exceptions import NotFittedError
 
 class Cache:
     """Cache for the powers of the transition matrix."""
