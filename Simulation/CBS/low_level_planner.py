@@ -10,7 +10,6 @@ import logging
 from collections import deque
 from heapq import heappush, heappop, heapify
 from itertools import count
-import networkx as nx
 
 class LowLevelPlanner:
     def __init__(self, env):

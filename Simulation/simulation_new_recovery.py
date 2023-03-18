@@ -184,7 +184,8 @@ class SimulationNewRecovery(object):
 
             if not possible_moves:
                 self.deadlock = True
-                self.deadlock_task = algorithm.get_token()['guests_to_tasks'][guest]
+                self.deadlock_task = algorithm.get_token()['guests_to_tasks'][guest] \
+                    if guest in algorithm.get_token()['guests_to_tasks'] else None
                 self.deadlock_guest = guest
                 logging.error('DEADLOCK!2 (%d, %d)', x_new, y_new)
                 logging.error(self.deadlock_task)
@@ -208,251 +209,58 @@ class SimulationNewRecovery(object):
                 continue
 
             if accepted_moves:
-                # TODO @bonaluca: why? can't we just let the low level planner do the whole job?
-                if algorithm.get_token()['guests_to_tasks'][guest]['start'] in algorithm.get_token()['guests'][guest]:
-                    move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][guest]['start'])
-                else:
-                    move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][guest]['goal'])
-                #move = random.choice(possible_moves)
+#                # TODO @bonaluca: why? can't we just let the low level planner do the whole job?
+#                if algorithm.get_token()['guests_to_tasks'][guest]['start'] in algorithm.get_token()['guests'][guest]:
+#                    move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][guest]['start'])
+#                else:
+#                    move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][guest]['goal'])
                 self.n_replanning_guest += 1
-                x_new, y_new = move
+#                x_new, y_new = move
 
-#                try:
-#                    guests_to_replan = [guest]
-#                    first_moves = {guest: (x_new, y_new)}
-#                    self.replan2(algorithm, guests_to_replan, first_moves)
-#                except PathNotFoundError:
-#                    break
+                #try:
+                #    guests_to_replan = [guest]
+                #    first_moves = {guest: (x_new, y_new)}
+                #    self.replan2(algorithm, guests_to_replan, first_moves)
+                #except PathNotFoundError:
+                #    break
 
                 try:
-                    self.replan(algorithm, guest, first_move=(x_new, y_new))
+#                    self.replan(algorithm, guest, first_move=(x_new, y_new))
+                    self.replan_new(guest, algorithm)
                     continue
                 except PathNotFoundError:
                     # Path not found and no other viable way
                     if not set(possible_moves) - set(accepted_moves):
                         self.deadlock = True
                         self.deadlock_guest = guest
-                        self.deadlock_task = algorithm.get_token()['guests_to_tasks'][guest]
+                        self.deadlock_task = algorithm.get_token()['guests_to_tasks'][guest] \
+                            if guest in algorithm.get_token()['guests_to_tasks'] else None
                         return
 
             # Possible deadlock that may be recoverable, since it involves only guests
-            self.deadlock_guest = guest
-            self.deadlock_task = algorithm.get_token()['guests_to_tasks'][guest]
             logging.info('Possible deadlock for %s at (%d, %d) involving other guests' % (guest, x_new, y_new))
-            logging.info(self.deadlock_task)
 
-###############################################################################################################################################################
+            guests_to_replan = [guest]
+            new_guests = algorithm.guests_nearby(guest)
+            while new_guests:
+                guests_to_replan += sorted(new_guests)
+                new_guests = set.union(*[
+                    algorithm.guests_nearby(new_guest) for new_guest in new_guests
+                ]) - set(guests_to_replan)
 
-            accepted_moves = possible_moves.copy()
+            while guests_to_replan:
+                guest = guests_to_replan.pop(0)
+                try:
+                    self.replan_new(guest, algorithm, ignore_guests=guests_to_replan)
+                    self.n_replanning_guest += 1
+                except PathNotFoundError:
+                    logging.error('Deadlock due to %s' % guest)
+                    self.deadlock = True
+                    self.deadlock_guest = guest
+                    self.deadlock_task = algorithm.get_token()['guests_to_tasks'][guest] \
+                        if guest in algorithm.get_token()['guests_to_tasks'] else None
+                    return
 
-            guests_change_move = []
-            #prima di tutto il guest in deadlock cambia mossa
-            if algorithm.get_token()['guests_to_tasks'][guest]['start'] in algorithm.get_token()['guests'][guest]:
-                # TODO @bonaluca: BUGFIX accepted_moves may be empty (env1.3.yaml)
-                move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][guest]['start'])
-            else:
-                move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][guest]['goal'])
-
-            for guest_check in guests:
-                # TODO @bonaluca: this only inserts vertex conflicting guests, edge conflicts to be added
-                if algorithm.next_pos_guests(guest_check) == move:
-                    guests_change_move.append(guest_check)
-
-            #ind_new_move = guests_interfere_moves.index(move)
-            #guests_change_move.append(guests_interfere[ind_new_move])
-            self.n_replanning_guest += 1
-            x_new = move[0]
-            y_new = move[1]
-            algorithm.get_token()['guests'][guest] = []
-            algorithm.get_token()['guests'][guest].append([current_guest_pos['x'], current_guest_pos['y']])
-            algorithm.get_token()['guests'][guest].append([x_new, y_new])
-
-
-################################################################################################################################################################
-            guests_replan = []
-            guests_start = []
-            guests_replan.append(guest)
-            while len(guests_change_move) > 0:
-                logging.info('guests_change_move %s' % str(guests_change_move))
-                g = guests_change_move[0]
-
-                current_guest_pos = self.actual_paths_guests[g][-1] #current_guest_pos tells us the current position of the guest
-                self.guests_pos_now.add(tuple([current_guest_pos['x'], current_guest_pos['y']])) #guest current position update
-
-                # possible_moves denotes all available moves, excluding those
-                # that are conflicting with agents' plans
-                possible_moves = list(filter(
-                    lambda move: \
-                        location_within_grid(move) and
-                        move not in obstacles_guests and
-                        move not in [algorithm.next_pos_agents(agent) for agent in agents] and
-                        move not in [
-                            algorithm.current_pos_agents(agent) for agent in agents
-                            if algorithm.next_pos_agents(agent) == algorithm.current_pos_guests(g)
-                        ],
-                    neighbors(algorithm.current_pos_guests(g))
-                ))
-
-                accepted_moves = possible_moves.copy()
-
-                # case in which the guest has a task assigned
-                if len(algorithm.get_token()['guests'][g]) > 1:
-                    x_new, y_new = algorithm.get_token()['guests'][g][1]
-                    logging.info('x_new, y_new (%d, %d) %s' % (x_new, y_new, g))
-
-                    interfering_guests = dict()
-
-                    for move in accepted_moves:
-                        for other_guest in guests:
-                            if other_guest == g:
-                                continue
-
-                            #remove move if the move is the same as the one of another guest
-                            if move == algorithm.next_pos_guests(other_guest):
-                                interfering = interfering_guests.setdefault(move, [])
-                                interfering.append(other_guest)
-
-                            #remove move if there is an exchange between guest and another guest positions
-                            if move == algorithm.current_pos_guests(other_guest) and \
-                                algorithm.next_pos_guests(other_guest) == algorithm.current_pos_guests(g):
-                                interfering = interfering_guests.setdefault(move, [])
-                                interfering.append(other_guest)
-
-                    accepted_moves = list(filter(lambda move:
-                        move not in interfering_guests.keys(),
-                        possible_moves
-                    ))
-
-                    if (x_new, y_new) not in accepted_moves:
-                        if accepted_moves:
-
-                            #here the move is changed according to the possible ones
-                            if algorithm.get_token()['guests_to_tasks'][g]['start'] in algorithm.get_token()['guests'][g]:
-                                move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][g]['start'])
-                            else:
-                                move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][g]['goal'])
-
-                            self.n_replanning_guest += 1
-                            x_new = move[0]
-                            y_new = move[1]
-                            guests_replan.append(guests_change_move[0])
-                            guests_change_move.remove(guests_change_move[0])
-
-                            if algorithm.get_token()['guests_to_tasks'][g]['start'] in algorithm.get_token()['guests'][g]:
-                                guests_start.append(g)
-
-
-                            algorithm.get_token()['guests'][g] = []
-                            algorithm.get_token()['guests'][g].append([current_guest_pos['x'], current_guest_pos['y']])
-                            algorithm.get_token()['guests'][g].append([x_new, y_new])
-
-                        elif possible_moves:
-                            moves = list(interfering_guests.keys())
-                            if algorithm.get_token()['guests_to_tasks'][g]['start'] in algorithm.get_token()['guests'][g]:
-                                move = self.get_closest_move(moves, algorithm.get_token()['guests_to_tasks'][g]['start'])
-                            else:
-                                move = self.get_closest_move(moves, algorithm.get_token()['guests_to_tasks'][g]['goal'])
-
-#                            ind_new_move = guests_interfere_moves.index(move)
-#                            guests_change_move.append(guests_interfere[ind_new_move])
-                            guests_change_move += interfering_guests[move]
-                            self.n_replanning_guest += 1
-                            x_new = move[0]
-                            y_new = move[1]
-                            guests_replan.append(guests_change_move[0])
-                            guests_change_move.remove(guests_change_move[0])
-
-                            if algorithm.get_token()['guests_to_tasks'][g]['start'] in algorithm.get_token()['guests'][g]:
-                                guests_start.append(g)
-
-                            algorithm.get_token()['guests'][g] = []
-                            algorithm.get_token()['guests'][g].append([current_guest_pos['x'], current_guest_pos['y']])
-                            algorithm.get_token()['guests'][g].append([x_new, y_new])
-
-                        else:
-                            logging.error('Deadlock due to the move of %s' % g)
-                            self.deadlock = True
-                            self.deadlock_guest = g
-                            self.deadlock_task = algorithm.get_token()['guests_to_tasks'][g]
-                            break
-
-                else: # guest to change move is idle
-                    x_new, y_new = algorithm.get_token()['guests'][g][0]
-
-                    logging.info('x_new, y_new (%d, %d) %s' % (x_new, y_new, g))
-
-                    #remove move if the move is the same as the one of another guest
-                    interfering_guests = dict()
-
-                    for move in accepted_moves:
-                        for other_guest in guests:
-                            if other_guest == g:
-                                continue
-
-                            if move == algorithm.next_pos_guests(other_guest):
-                                interfering = interfering_guests.setdefault(move, [])
-                                interfering.append(other_guest)
-
-                    accepted_moves = list(filter(lambda move:
-                        move not in interfering_guests.keys(),
-                        possible_moves
-                    ))
-
-                    if (x_new, y_new) not in accepted_moves:
-                        if accepted_moves:
-                            #here the move is changed according to the possible ones
-                            move = random.choice(accepted_moves)
-
-                            self.n_replanning_guest += 1
-                            x_new, y_new = move
-                            guests_replan.append(guests_change_move[0])
-                            guests_change_move.remove(guests_change_move[0])
-
-                            algorithm.get_token()['guests'][g] = []
-                            algorithm.get_token()['guests'][g].append([current_guest_pos['x'], current_guest_pos['y']])
-                            algorithm.get_token()['guests'][g].append([x_new, y_new])
-
-                        elif possible_moves:
-                            move = random.choice(list(interfering_guests.keys()))
-
-#                            ind_new_move = guests_interfere_moves.index(move)
-#                            guests_change_move.append(guests_interfere[ind_new_move])
-                            guests_change_move += interfering_guests[move]
-                            self.n_replanning_guest += 1
-                            x_new, y_new = move
-                            guests_replan.append(guests_change_move[0])
-                            guests_change_move.remove(guests_change_move[0])
-
-                            algorithm.get_token()['guests'][g] = []
-                            algorithm.get_token()['guests'][g].append([current_guest_pos['x'], current_guest_pos['y']])
-                            algorithm.get_token()['guests'][g].append([x_new, y_new])
-
-                        else:
-                            logging.error('Deadlock due to the move of %s' % g)
-                            self.deadlock = True
-                            self.deadlock_guest = g
-                            self.deadlock_task = algorithm.get_token()['guests_to_tasks'][g]
-                            break
-
-######################################################################################################################################################################
-            #ora tutti i guest che hanno dovuto cambiare mossa devono fare replanning
-            for g_rep in sorted(set(guests_replan)):
-                # Skip free guests
-                if not g_rep in algorithm.get_token()['guests_to_tasks']:
-                    continue
-
-                # TODO @bonaluca: ugly workaround to get the proper replanning towards task start and goal
-                if g_rep in guests_start:
-                    task_start = algorithm.get_token()['guests_to_tasks'][g_rep]['start'].copy()
-                    algorithm.get_token()['guests'][g_rep].append(task_start)
-
-                x_new, y_new = algorithm.get_token()['guests'][g_rep][1]
-                self.replan(algorithm, g_rep, (x_new, y_new))
-                #functions.planning_function(g_rep, algorithm, x_new, y_new, obstacles_guests, dimensions, a_star_max_iter, self, guests_start)
-
-            if self.deadlock:
-                logging.error('Deadlock with one guest only')
-                return
 
         for guest in idle_guests:
             self.guest_presence = False
@@ -711,10 +519,10 @@ class SimulationNewRecovery(object):
             cbs = CBS(env)
             path_to_task_start = algorithm.search(cbs)
             if not path_to_task_start:
-                logging.info("REPLANNING 1 Solution not found to task start for guest %s idling at current position...", guest)
+                logging.info("REPLANNING - Solution not found to task start for %s...", guest)
                 raise PathNotFoundError()
 
-            logging.info("REPLANNING 1 Solution found to task start for guest %s searching solution to task goal...", guest)
+            logging.info("REPLANNING - Solution found to task start for %s, searching solution to task goal...", guest)
             cost1 = env.compute_solution_cost(path_to_task_start)
             for el in path_to_task_start[guest][:-1]:
                 new_token.append([el['x'], el['y']])
@@ -737,12 +545,12 @@ class SimulationNewRecovery(object):
         cbs = CBS(env)
         path_to_task_goal = algorithm.search(cbs)
         if not path_to_task_goal:
-            logging.info("REPLANNING 2 - Solution not found to task goal for guest %s idling at current position...", guest)
+            logging.info("REPLANNING - Solution not found to task goal for %s...", guest)
             raise PathNotFoundError()
 
         cost2 = env.compute_solution_cost(path_to_task_goal)
         total_cost += cost2
-        logging.info("REPLANNING - Solution found to task goal for guest %s doing task...", guest)
+        logging.info("REPLANNING - Solution found to task goal for guest %s...", guest)
         last_step = path_to_task_goal[guest][-1]
         algorithm.update_ends_guests(algorithm.current_pos_guests(guest))
         algorithm.get_token()['path_ends_guest'].add(tuple([last_step['x'], last_step['y']]))
@@ -753,103 +561,59 @@ class SimulationNewRecovery(object):
         algorithm.get_token()['guests'][guest] = new_token
         pass
 
-    def replan_new(self, guest, algorithm):
-        """."""
+    def replan_new(self, guest, algorithm, ignore_guests=[]):
+        """Replan for a guest agent."""
 
         time_start = 0
-        task = algorithm.get_token()['guests_to_tasks'][guest]
         start_location = list(algorithm.current_pos_guests(guest))
         new_token = []
         total_cost = 0
-        all_idle_guests = algorithm.get_token()['guests'].copy()
-        all_idle_guests.pop(guest)
+        avoid_nearby_agents = True
 
-        nearby_agent_tokens = {
-            agent: [algorithm.current_pos_agents(agent), algorithm.next_pos_agents(agent)]
-            for agent in algorithm.agents_nearby(guest)
-        }
-
-        if task['start'] in algorithm.get_token()['guests'][guest][1:]:
-
-            #we first replan a path from the new location to the pick-up point
-
-            # Replan by taking care of existing guests' paths
-            moving_obstacles_guests = algorithm.get_moving_obstacles(all_idle_guests, time_start)
-            idle_obstacles_guests = algorithm.get_idle_obstacles(all_idle_guests.values(), time_start)
-
-            # Replan by taking care of nearby-agents' paths (at most 2 steps in the future)
-            moving_obstacles_agents = algorithm.get_moving_obstacles(nearby_agent_tokens, time_start)
-            # Remove idle-like obstacles
-            moving_obstacles_agents = dict(filter(
-                lambda item: item[0][2] >= 0, moving_obstacles_agents.items()
-            ))
-            # Joining the two moving obstacles dictionaries
-            moving_obstacles = {}
-            moving_obstacles.update(moving_obstacles_guests.items())
-            moving_obstacles.update(moving_obstacles_agents.items())
-
-            guests = [{'name': guest, 'start': start_location, 'goal': task['start']}]
-            env = DynamicEnvironment(
-                algorithm.dimensions, guests, set(algorithm.obstacles_guests) | idle_obstacles_guests,
-                moving_obstacles, algorithm.a_star_max_iter,
-                graph=self.get_graph_guests(),
-                time_start=time_start,
-                weight_function=self.weight_function,
-                occupancy_model=self.occupancy_model
+        if guest not in algorithm.get_token()['guests_to_tasks']:
+            # Guest has no task assigned
+            algorithm.go_to_closest_non_task_endpoint_guest(
+                guest, avoid_nearby_agents=True, ignore_guests=ignore_guests
             )
-            cbs = CBS(env)
-            path_to_task_start = algorithm.search(cbs)
-            if not path_to_task_start:
-                logging.info("REPLANNING 1 Solution not found to task start for guest %s idling at current position...", guest)
-                raise PathNotFoundError()
+            return
 
-            logging.info("REPLANNING 1 Solution found to task start for guest %s searching solution to task goal...", guest)
-            cost1 = env.compute_solution_cost(path_to_task_start)
+        # Guest has an assigned task
+        task = algorithm.get_token()['guests_to_tasks'][guest]
+
+        # Plan to task start if not yet reached
+        if task['start'] in algorithm.get_token()['guests'][guest][1:]:
+            path_to_task_start, cost = algorithm.plan_for_guest(
+                guest, start_location, task['start'],
+                avoid_nearby_agents=avoid_nearby_agents,
+                ignore_guests=ignore_guests
+            )
+
             for el in path_to_task_start[guest][:-1]:
                 new_token.append([el['x'], el['y']])
-            total_cost += cost1
-            time_start = cost1 - 1
+            total_cost += cost
+            time_start = cost - 1
             start_location = task['start']
-            nearby_agent_tokens = {} # Don't consider agents after first replan
+            avoid_nearby_agents = False # Don't consider agents after first replan
 
-        #once the path to the pick-up point has been found, we replan a path to the delivery point
-        moving_obstacles_guests = algorithm.get_moving_obstacles(all_idle_guests, time_start)
-        idle_obstacles_guests = algorithm.get_idle_obstacles(all_idle_guests.values(), time_start)
+        # Plan to task goal
+        path_to_task_goal, cost = algorithm.plan_for_guest(
+            guest, start_location, task['goal'], time_start=time_start,
+            avoid_nearby_agents=avoid_nearby_agents,
+            ignore_guests=ignore_guests
+        )
 
-        # Replan by taking care of nearby-agents' paths (at most 2 steps in the future)
-        moving_obstacles_agents = algorithm.get_moving_obstacles(nearby_agent_tokens, time_start)
-        # Remove idle-like obstacles
-        moving_obstacles_agents = dict(filter(
-            lambda item: item[0][2] >= 0, moving_obstacles_agents.items()
-        ))
-        # Joining the two moving obstacles dictionaries
-        moving_obstacles = dict()
-        moving_obstacles.update(moving_obstacles_guests.items())
-        moving_obstacles.update(moving_obstacles_agents.items())
-
-        guests = [{'name': guest, 'start': start_location, 'goal': task['goal']}]
-        env = DynamicEnvironment(
-            algorithm.dimensions, guests, algorithm.obstacles_guests | idle_obstacles_guests,
-            moving_obstacles, a_star_max_iter=algorithm.a_star_max_iter, time_start=time_start,
-            graph=self.get_graph_guests(),
-            weight_function=self.weight_function,
-            occupancy_model=self.occupancy_model)
-        cbs = CBS(env)
-        path_to_task_goal = algorithm.search(cbs)
-        if not path_to_task_goal:
-            logging.info("REPLANNING 2 - Solution not found to task goal for guest %s idling at current position...", guest)
-            raise PathNotFoundError()
-
-        cost2 = env.compute_solution_cost(path_to_task_goal)
-        total_cost += cost2
-        logging.info("REPLANNING - Solution found to task goal for guest %s doing task...", guest)
-        last_step = path_to_task_goal[guest][-1]
-        algorithm.update_ends_guests(algorithm.current_pos_guests(guest))
-        algorithm.get_token()['path_ends_guest'].add(tuple([last_step['x'], last_step['y']]))
-        algorithm.get_token()['guests_to_tasks'][guest] = {'task_name': task['task_name'], 'start': task['start'],
-                                                    'goal': task['goal'], 'predicted_cost': total_cost}
         for el in path_to_task_goal[guest]:
             new_token.append([el['x'], el['y']])
+        total_cost += cost
+        prev_path_end = algorithm.get_token()['guests'][guest][-1]
+        path_end = new_token[-1]
+        algorithm.update_ends_guests(tuple(prev_path_end))
+        algorithm.get_token()['path_ends_guest'].add(tuple(path_end))
+        algorithm.get_token()['guests_to_tasks'][guest] = {
+            'task_name': task['task_name'], 'start': task['start'],
+            'goal': task['goal'], 'predicted_cost': total_cost
+        }
+        # Update token
         algorithm.get_token()['guests'][guest] = new_token
 
     def get_time(self):
