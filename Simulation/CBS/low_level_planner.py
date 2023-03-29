@@ -141,9 +141,11 @@ class Dijkstra(LowLevelPlanner):
         try:
             final_path = [node[1:3] for node in paths[v]]
             #print('final path',final_path)
+            if final_path[-1] != target:
+                final_path = False
             return (dist[v], final_path)
         except KeyError as err:
-            raise nx.NetworkXNoPath(f"No path to {target}.") from err
+            raise PathNotFoundError(f"No path to {target}.") from err
 
     def _dijkstra_multisource(self, sources, pred=None, paths=None, cutoff=None, target=None):
         push = heappush

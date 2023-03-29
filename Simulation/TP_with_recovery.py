@@ -471,7 +471,7 @@ class TokenPassingRecovery(object):
         location_within_grid = lambda loc: \
             0 <= loc[0] < self.dimensions[0] and 0 <= loc[1] < self.dimensions[1]
         surroundings_of = lambda loc: set(filter(
-            lambda loc: location_within_grid(loc) and not loc in self.obstacles_agents,
+            lambda loc: location_within_grid(loc),
             [
                 (loc[0]-2, loc[1]), (loc[0]-1, loc[1]-1), (loc[0]-1, loc[1]), (loc[0]-1, loc[1]+1),
                 (loc[0], loc[1]-2), (loc[0], loc[1]-1), (loc[0], loc[1]), (loc[0], loc[1]+1), (loc[0], loc[1]+2),
