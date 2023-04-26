@@ -234,6 +234,7 @@ class Dijkstra2(LowLevelPlanner):
         heappush(heap, (tentative_dists[initial_state], initial_state))
 
         while open_set:
+            self.iter += 1
             current = heappop(heap)[1]
             open_set -= {current}
             visited[current] = tentative_dists[current]

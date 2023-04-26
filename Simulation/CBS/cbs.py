@@ -117,7 +117,7 @@ class Environment(object):
         self.constraints = Constraints()
         self.constraint_dict = {}
 
-        self.low_level_planner = Dijkstra(self)
+        self.low_level_planner = AStar(self)
 
     def get_neighbors(self, state):
         if type(state) != State:
