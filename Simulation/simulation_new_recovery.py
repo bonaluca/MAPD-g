@@ -8,11 +8,14 @@ from Simulation.exceptions import NotFittedError, PathNotFoundError
 
 class SimulationNewRecovery(object):
     random.seed(1234)
-    def __init__(self, tasks, tasks_guest, agents, guests, occupancy_model, alpha):
+    def __init__(self, tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha):
         self.tasks = tasks #tasks of the agents
         self.tasks_guest = tasks_guest #tasks of the guests
         self.agents = agents #the agents
         self.guests = guests #the guests
+        self.obstacles_agents = obstacles_agents #the obstacles for the agents
+        self.obstacles_guests = obstacles_guests #the obstacles for the guests
+        self.dimensions = dimensions #the dimensions of the grid
         self.occupancy_model = occupancy_model #the occupancy model of the agents
         self.alpha = alpha
         self.time = 0 #initialization of the time steps of the algorithm
@@ -43,73 +46,69 @@ class SimulationNewRecovery(object):
         for guest in self.guests: #we update the actual paths of the guests by adding their current initial position
             self.actual_paths_guests[guest['name']] = [{'t': 0, 'x': guest['start'][0], 'y': guest['start'][1]}]
 
+        logging.info('Residential matrix inizialization')
+        elist_agents = []
+        for i in range(0,self.dimensions[0]):
+            for j in range(0,self.dimensions[1]):
+                if (i,j) not in self.obstacles_agents:
+                    if (i+1,j) not in self.obstacles_agents and i+1 < self.dimensions[0]:
+                        elist_agents.append(((i,j),(i+1,j),1))
+                    if (i-1,j) not in self.obstacles_agents and i-1 > -1:
+                        elist_agents.append(((i,j),(i-1,j),1))
+                    if (i,j-1) not in self.obstacles_agents and j-1 > -1:
+                        elist_agents.append(((i,j),(i,j-1),1))
+                    if (i,j+1) not in self.obstacles_agents and j+1 < self.dimensions[1]:
+                        elist_agents.append(((i,j),(i,j+1),1))
+                    if (i,j) not in self.obstacles_agents:
+                        elist_agents.append(((i,j),(i,j),1))
+        self.G_agents = nx.MultiDiGraph()
+        self.G_agents.add_weighted_edges_from(elist_agents)
+
+        #print(elist_agents)
+        logging.debug(self.G_agents)
+
+        logging.info('Guest matrix inizialization')
+        elist_guest = []
+        for i in range(0,self.dimensions[0]):
+            for j in range(0,self.dimensions[1]):
+                if (i,j) not in self.obstacles_guests:
+                    if (i+1,j) not in self.obstacles_guests and i+1 < self.dimensions[0]:
+                        elist_guest.append(((i,j),(i+1,j), 1))
+                    if (i-1,j) not in self.obstacles_guests and i-1 > -1:
+                        elist_guest.append(((i,j),(i-1,j), 1))
+                    if (i,j-1) not in self.obstacles_guests and j-1 > -1:
+                        elist_guest.append(((i,j),(i,j-1), 1))
+                    if (i,j+1) not in self.obstacles_guests and j+1 < self.dimensions[1]:
+                        elist_guest.append(((i,j),(i,j+1), 1))
+                    if (i,j) not in self.obstacles_guests:
+                        elist_guest.append(((i,j),(i,j), 1))
+        self.G_guests = nx.MultiDiGraph()
+        self.G_guests.add_weighted_edges_from(elist_guest)
+
+        self.diam_g = nx.diameter(self.G_guests)
+
+        logging.debug(self.G_agents)
+        logging.debug('Graph diameter: %s' % self.diam_g)
+
+#        # Weight function that balances distance and probability of occupancy
+#        self.weight_function = lambda dist, prob_occ: \
+#            1 / max((1 - prob_occ) ** (self.alpha), 5e-4)
+
+        # Weight function that balances distance and probability of occupancy
+        if self.alpha != 1:
+            self.weight_function = lambda dist, prob_occ: \
+                ((1 - self.alpha) * dist) / self.diam_g + self.alpha * prob_occ
+        else:
+            # Prevent zero cost edges
+            self.weight_function = lambda dist, prob_occ: \
+                max(prob_occ, 5e-4)
 
 
     # time_forward is the method in which the agents are effectly moved and the time is shifted one step ahead
-    def time_forward(self, algorithm, dimensions, non_task_endpoints_guests, obstacles, obstacles_agents, obstacles_guests, a_star_max_iter):
-
-        # TODO @bonaluca: this should not be in here
-        if self.time == 0:
-            logging.info('Residential matrix inizialization')
-            elist_agents = []
-            for i in range(0,dimensions[0]):
-                for j in range(0,dimensions[1]):
-                    if (i,j) not in obstacles_agents:
-                        if (i+1,j) not in obstacles_agents and i+1 < dimensions[0]:
-                            elist_agents.append(((i,j),(i+1,j),1))
-                        if (i-1,j) not in obstacles_agents and i-1 > -1:
-                            elist_agents.append(((i,j),(i-1,j),1))
-                        if (i,j-1) not in obstacles_agents and j-1 > -1:
-                            elist_agents.append(((i,j),(i,j-1),1))
-                        if (i,j+1) not in obstacles_agents and j+1 < dimensions[1]:
-                            elist_agents.append(((i,j),(i,j+1),1))
-                        if (i,j) not in obstacles_agents:
-                            elist_agents.append(((i,j),(i,j),1))
-            self.G_agents = nx.MultiDiGraph()
-            self.G_agents.add_weighted_edges_from(elist_agents)
-
-            #print(elist_agents)
-            logging.debug(self.G_agents)
-
-            logging.info('Guest matrix inizialization')
-            elist_guest = []
-            for i in range(0,dimensions[0]):
-                for j in range(0,dimensions[1]):
-                    if (i,j) not in obstacles_guests:
-                        if (i+1,j) not in obstacles_guests and i+1 < dimensions[0]:
-                            elist_guest.append(((i,j),(i+1,j), 1))
-                        if (i-1,j) not in obstacles_guests and i-1 > -1:
-                            elist_guest.append(((i,j),(i-1,j), 1))
-                        if (i,j-1) not in obstacles_guests and j-1 > -1:
-                            elist_guest.append(((i,j),(i,j-1), 1))
-                        if (i,j+1) not in obstacles_guests and j+1 < dimensions[1]:
-                            elist_guest.append(((i,j),(i,j+1), 1))
-                        if (i,j) not in obstacles_guests:
-                            elist_guest.append(((i,j),(i,j), 1))
-            self.G_guests = nx.MultiDiGraph()
-            self.G_guests.add_weighted_edges_from(elist_guest)
-
-            diam_g = nx.diameter(self.G_guests)
-
-            logging.debug(self.G_agents)
-            logging.debug('Graph diameter: %s' % diam_g)
-
-#            # Weight function that balances distance and probability of occupancy
-#            self.weight_function = lambda dist, prob_occ: \
-#                1 / max((1 - prob_occ) ** (self.alpha), 5e-4)
-
-            # Weight function that balances distance and probability of occupancy
-            if self.alpha != 1:
-                self.weight_function = lambda dist, prob_occ: \
-                    ((1 - self.alpha) * dist) / diam_g + self.alpha * prob_occ
-            else:
-                # Prevent zero cost edges
-                self.weight_function = lambda dist, prob_occ: \
-                    max(prob_occ, 5e-4)
+    def time_forward(self, algorithm):
 
         self.time = self.time + 1
         logging.info('Time: %s', self.time)
-
 
         #keep track of the effective time in seconds to perform the tp algorithm
         start_time = time.time()
@@ -138,7 +137,7 @@ class SimulationNewRecovery(object):
 
         # Helpers
         location_within_grid = lambda loc: \
-            0 <= loc[0] < dimensions[0] and 0 <= loc[1] < dimensions[1]
+            0 <= loc[0] < self.dimensions[0] and 0 <= loc[1] < self.dimensions[1]
         neighbors = lambda loc: [
             #(loc[0]-1, loc[1]), (loc[0], loc[1]-1), (loc[0], loc[1]), (loc[0], loc[1]+1), (loc[0]+1, loc[1])
             (loc[0], loc[1]), (loc[0]+1, loc[1]), (loc[0]-1, loc[1]), (loc[0], loc[1]+1), (loc[0], loc[1]-1)
@@ -174,7 +173,7 @@ class SimulationNewRecovery(object):
             possible_moves = list(filter(
                 lambda move: \
                     location_within_grid(move) and
-                    move not in obstacles_guests and
+                    move not in self.obstacles_guests and
                     move not in [algorithm.next_pos_agents(agent) for agent in agents] and
                     move not in [
                         algorithm.current_pos_agents(agent) for agent in agents
@@ -286,7 +285,7 @@ class SimulationNewRecovery(object):
             possible_moves = list(filter(
                 lambda move: \
                     location_within_grid(move) and
-                    move not in obstacles_guests and
+                    move not in self.obstacles_guests and
                     move not in [algorithm.next_pos_agents(agent) for agent in agents] and
                     move not in [
                         algorithm.current_pos_agents(agent) for agent in agents

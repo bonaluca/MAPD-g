@@ -105,8 +105,6 @@ class Environment(object):
         self.a_star_max_iter = a_star_max_iter
         self.time_start = time_start
 
-        # TODO @bonaluca: graph ref needed only to pass it to AStar.search()
-        # Could be replaced with weighting function
         self.graph = graph
 
         self.agents = agents

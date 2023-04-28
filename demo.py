@@ -120,7 +120,7 @@ if __name__ == '__main__':
         occupancy_model.load(args.load_filename)
 
     # Simulate
-    simulation = SimulationNewRecovery(tasks, tasks_guest, agents, guests, occupancy_model, alpha=args.alpha)
+    simulation = SimulationNewRecovery(tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha=args.alpha)
     a_star_max_iter = 4000
     observation_time=args.obs_time
     tp = TokenPassingRecovery(agents, guests, dimensions, obstacles_agents, obstacles_guests, non_task_endpoints, non_task_endpoints_guests, simulation,
@@ -144,7 +144,7 @@ if __name__ == '__main__':
             occupancy_model.fit(data)
             last_fit = simulation.time + 1
 
-        simulation.time_forward(tp, dimensions, non_task_endpoints_guests, obstacles, obstacles_agents, obstacles_guests, a_star_max_iter)
+        simulation.time_forward(tp)
 
         if simulation.deadlock == True:
             #logging.error('Deadlock')
