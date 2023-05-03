@@ -122,26 +122,12 @@ class Environment(object):
             state=State(state[0], Location(state[1], state[2]))
         neighbors = []
 
-        # Wait action
-        n = State(state.time + 1, state.location)
-        if self.state_valid(n):
-            neighbors.append((n, self.get_edge_weight(state, n)))
-        # Up action
-        n = State(state.time + 1, Location(state.location.x, state.location.y+1))
-        if self.state_valid(n) and self.transition_valid(state, n):
-            neighbors.append((n, self.get_edge_weight(state, n)))
-        # Down action
-        n = State(state.time + 1, Location(state.location.x, state.location.y-1))
-        if self.state_valid(n) and self.transition_valid(state, n):
-            neighbors.append((n, self.get_edge_weight(state, n)))
-        # Left action
-        n = State(state.time + 1, Location(state.location.x-1, state.location.y))
-        if self.state_valid(n) and self.transition_valid(state, n):
-            neighbors.append((n, self.get_edge_weight(state, n)))
-        # Right action
-        n = State(state.time + 1, Location(state.location.x+1, state.location.y))
-        if self.state_valid(n) and self.transition_valid(state, n):
-            neighbors.append((n, self.get_edge_weight(state, n)))
+        # Neighboring locations are derived from the graph
+        state_location = (state.location.x, state.location.y)
+        for (neighbor_x, neighbor_y) in self.graph.neighbors(state_location):
+            n = State(state.time + 1, Location(neighbor_x, neighbor_y))
+            if self.state_valid(n) and self.transition_valid(state, n):
+                neighbors.append((n, self.get_edge_weight(state, n)))
         return neighbors
 
 
