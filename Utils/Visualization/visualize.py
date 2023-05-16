@@ -12,6 +12,7 @@ import argparse
 import math
 import json
 import os
+import re
 import RoothPath
 
 
@@ -80,17 +81,17 @@ class Animation:
             self.patches.append(self.tasks[t['task_name']][0])
         for t, i in zip(map["tasks"], range(len(map["tasks"]))):
             x_g, y_g = t['goal'][0], t['goal'][1]
-            self.tasks[t['task_name']].append(RegularPolygon((x_g, y_g - 0.05), 3, 0.2, facecolor=task_colors[i], edgecolor='black', alpha=0))
+            self.tasks[t['task_name']].append(RegularPolygon((x_g, y_g - 0.05), 3, radius=0.2, facecolor=task_colors[i], edgecolor='black', alpha=0))
             self.patches.append(self.tasks[t['task_name']][1])
 
         task_colors_guest = np.random.rand(len(map["tasks_guest"]), 3)
         for t, i in zip(map["tasks_guest"], range(len(map["tasks_guest"]))):
             x_s, y_s = t['start'][0], t['start'][1]
-            self.tasks_guest[t['task_name']] = [RegularPolygon((x_s, y_s - 0.05), 6, 0.2, facecolor=task_colors[i], edgecolor='black', alpha=0)]
+            self.tasks_guest[t['task_name']] = [RegularPolygon((x_s, y_s - 0.05), 6, radius=0.2, facecolor=task_colors[i % len(task_colors)], edgecolor='black', alpha=0)]
             self.patches.append(self.tasks_guest[t['task_name']][0])
         for t, i in zip(map["tasks_guest"], range(len(map["tasks_guest"]))):
             x_g, y_g = t['goal'][0], t['goal'][1]
-            self.tasks_guest[t['task_name']].append(RegularPolygon((x_g, y_g - 0.05), 5, 0.2, facecolor=task_colors_guest[i], edgecolor='black', alpha=0))
+            self.tasks_guest[t['task_name']].append(RegularPolygon((x_g, y_g - 0.05), 5, radius=0.2, facecolor=task_colors_guest[i % len(task_colors)], edgecolor='black', alpha=0))
             self.patches.append(self.tasks_guest[t['task_name']][1])
 
         # Create agents:
@@ -165,19 +166,27 @@ class Animation:
         return self.patches + self.artists
 
     def animate_func(self, i):
-        for agent_name, agent in self.combined_schedule.items():
-            if agent_name != 'guest1' and agent_name != 'guest2' and agent_name != 'guest3'and agent_name != 'guest4' and agent_name != 'guest5':
-                pos = self.getState(i / self.slow_factor, agent)
-                p = (pos[0], pos[1])
-                self.agents[agent_name].center = p
-                self.agent_names[agent_name].set_position(p)
+        agent_schedule = dict((k, val)
+            for k, val in self.combined_schedule.items()
+            if re.match('^guest', k) is None
+        )
 
-        for guest_name, guest in self.combined_schedule.items():
-            if guest_name == 'guest1' or guest_name == 'guest2' or guest_name == 'guest3' or guest_name == 'guest4' or guest_name == 'guest5':
-                pos = self.getState(i / self.slow_factor, guest)
-                p = (pos[0], pos[1])
-                self.guests[guest_name].center = p
-                self.guest_names[guest_name].set_position(p)
+        guest_schedule = dict((k, val)
+            for k, val in self.combined_schedule.items()
+            if re.match('^guest', k) is not None
+        )
+
+        for agent_name, agent in agent_schedule.items():
+            pos = self.getState(i / self.slow_factor, agent)
+            p = (pos[0], pos[1])
+            self.agents[agent_name].center = p
+            self.agent_names[agent_name].set_position(p)
+
+        for guest_name, guest in guest_schedule.items():
+            pos = self.getState(i / self.slow_factor, guest)
+            p = (pos[0], pos[1])
+            self.guests[guest_name].center = p
+            self.guest_names[guest_name].set_position(p)
 
         # Reset all colors agents
         for _, agent in self.agents.items():
