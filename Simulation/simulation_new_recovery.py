@@ -104,7 +104,7 @@ class SimulationNewRecovery(object):
         elif weight_function == 'exp':
             # Weight function that balances distance and probability of occupancy
             self.weight_function = lambda dist, prob_occ: \
-                1 / max((1 - prob_occ) ** (self.alpha), 5e-4)
+                1 / max((1 - prob_occ) ** (self.alpha), 5e-3)
         else:
             raise ValueError(f'Weight function {weight_function} not recognised.')
 
