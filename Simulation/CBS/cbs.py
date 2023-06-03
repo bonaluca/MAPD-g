@@ -295,13 +295,22 @@ class DynamicEnvironment(Environment):
     def get_edge_weight(self, u, v):
         """Return the weight of the edge between states u and v."""
 
-        prob_occ = self.occupancy_model.predict((v.location.x, v.location.y), v.time)
+        loc_u = (u.location.x, u.location.y)
+        loc_v = (v.location.x, v.location.y)
 
-        u = (u.location.x, u.location.y)
-        v = (v.location.x, v.location.y)
+        # Pessimistic approximation: imputing max probability to v -> u
+        prob_edge_conflict = min(
+            self.occupancy_model.predict(loc_v, u.time),
+            self.occupancy_model.predict(loc_u, v.time)
+        ) if loc_u != loc_v else 0
+
+        prob_vertex_conflict = self.occupancy_model.predict(loc_v, v.time)
+
         # TODO @bonaluca: maybe deal with nx.NodeNotFound() exception
-        distance = self.graph.get_edge_data(u, v, 0).get('weight', 1)
-        weight = self.weight_function(distance, prob_occ)
+        prob_conflict = prob_vertex_conflict + prob_edge_conflict
+        distance = self.graph.get_edge_data(loc_u, loc_v, 0).get('weight', 1)
+
+        weight = self.weight_function(distance, prob_conflict)
         return weight
 
 class HighLevelNode(object):
