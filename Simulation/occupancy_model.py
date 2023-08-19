@@ -757,10 +757,11 @@ class MarkovianOccupancyModel(OccupancyModel):
         if type(cache_size) == str:
             cache_size_bytes = Cache.human2bytes(cache_size)
 
-        # Equally share cache between occupancy model and markov chains
+        # Equally share cache between occupancy model and the n markov chains
         self.cache_entries = min(
             cache_size_bytes // (self.width * self.height * 8 * (1 + self.n_agents)),
-            100)
+            500)
+        logging.info('Occupancy model: n. of aggregate prediction cache entries %d' % self.cache_entries)
         self.cache_entries = max(self.cache_entries, 1) # At least one cache entry
         cache_size_bytes -= self.cache_entries * self.width * self.height * 8
 
@@ -874,7 +875,7 @@ class MarkovianOccupancyModel(OccupancyModel):
             self._predict_cache[cache_index] = {
                 'time': t, 'prediction': prediction
             }
-            logging.debug("Occupancy model: cached aggregate predictions at time %d" % t)
+            logging.debug("Occupancy model: aggregate predictions cache miss at time %d" % t)
             return prediction
 
     def load(self, file):
