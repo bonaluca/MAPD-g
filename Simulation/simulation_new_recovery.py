@@ -247,7 +247,13 @@ class SimulationNewRecovery(object):
             )['task_name']
 
             task_conflicts = self.replannings.setdefault(conflicting_task, [])
-            task_conflicts.append({'time': self.time, 'agent': conflicting_agent})
+            task_conflicts.append(
+                {
+                    'time': self.time,
+                    'agent': conflicting_agent,
+                    'location': algorithm.next_pos_guests(guest)
+                }
+            )
 
             # Guest conflicts with an agent, but an alternative move is available
             if accepted_moves:
@@ -360,7 +366,13 @@ class SimulationNewRecovery(object):
             )['task_name']
 
             task_conflicts = self.replannings.setdefault(conflicting_task, [])
-            task_conflicts.append({'time': self.time, 'agent': conflicting_agent})
+            task_conflicts.append(
+                {
+                    'time': self.time,
+                    'agent': conflicting_agent,
+                    'location': algorithm.next_pos_guests(guest)
+                }
+            )
 
             # if the presence of conflicts is true, we change the next move of the guest (choosing a random one) and replan
             move = random.choice(accepted_moves)
@@ -705,6 +717,12 @@ class SimulationNewRecovery(object):
     def get_replanning_times(self):
         return {
             task: list(map(lambda x: x['time'], conflicts))
+            for task, conflicts in self.replannings.items()
+        }
+
+    def get_replanning_locations(self):
+        return {
+            task: list(map(lambda x: x['location'], conflicts))
             for task, conflicts in self.replannings.items()
         }
 
