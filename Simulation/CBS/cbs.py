@@ -271,11 +271,13 @@ class DynamicEnvironment(Environment):
     """Environment with occupancy model"""
 
     def __init__(self, dimension, agents, obstacles, moving_obstacles=None, a_star_max_iter=-1,
-    graph=None, time_start=0, weight_function=None, occupancy_model=None, low_level_algo='dijkstra'):
+    graph=None, time_start=0, weight_function=None, occupancy_model=None, low_level_algo='dijkstra',
+    is_replanning=False):
         super().__init__(dimension, agents, obstacles, moving_obstacles, a_star_max_iter, graph, time_start)
 
         self.weight_function = weight_function
         self.occupancy_model = occupancy_model
+        self.is_replanning = is_replanning
         if low_level_algo == 'dijkstra':
             self.low_level_planner = Dijkstra(self)
         elif low_level_algo == 'astar':
@@ -291,8 +293,8 @@ class DynamicEnvironment(Environment):
 
         # Pessimistic approximation: imputing max probability to v -> u
         prob_edge_conflict = min(
-            self.occupancy_model.predict(loc_v, u.time),
-            self.occupancy_model.predict(loc_u, v.time)
+            self.occupancy_model.predict(loc_v, u.time, is_replanning=self.is_replanning),
+            self.occupancy_model.predict(loc_u, v.time, is_replanning=self.is_replanning)
         ) if loc_u != loc_v else 0
 
         prob_vertex_conflict = self.occupancy_model.predict(loc_v, v.time)

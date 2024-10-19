@@ -38,6 +38,7 @@ class SimulationNewRecovery(object):
         self.replannings = {} #it is a dictionary that tracks the time steps at which a replan occurs for a task
         self.agent_sightings = {} #it is a dictionary that keeps track of the agents that the guests encountered
         self.algo_time = 0 #it keeps track of the time (in seconds) that the tp algorithm employs for each iteration
+        self.replan_time = 0 # keeps track of the time (in seconds) that the tp algorithm employs for the replanning
         self.n_replanning_guest = 0 #it counts the number of times a guest has to change its path in order to avoid an agent
         self.to_replan_from_start = []
         self.to_replan_from_goal = []
@@ -633,6 +634,8 @@ class SimulationNewRecovery(object):
     def replan_new(self, guest, algorithm, ignore_guests=[]):
         """Replan for a guest agent."""
 
+        tick = time.time() # Keep track of start time
+
         time_start = 0
         start_location = list(algorithm.current_pos_guests(guest))
         new_token = []
@@ -654,7 +657,8 @@ class SimulationNewRecovery(object):
             path_to_task_start, cost = algorithm.plan_for_guest(
                 guest, start_location, task['start'],
                 avoid_nearby_agents=avoid_nearby_agents,
-                ignore_guests=ignore_guests
+                ignore_guests=ignore_guests,
+                is_replanning=True
             )
 
             for el in path_to_task_start[:-1]:
@@ -668,7 +672,8 @@ class SimulationNewRecovery(object):
         path_to_task_goal, cost = algorithm.plan_for_guest(
             guest, start_location, task['goal'], time_start=time_start,
             avoid_nearby_agents=avoid_nearby_agents,
-            ignore_guests=ignore_guests
+            ignore_guests=ignore_guests,
+            is_replanning=True
         )
 
         for el in path_to_task_goal:
@@ -685,11 +690,25 @@ class SimulationNewRecovery(object):
         # Update token
         algorithm.get_token()['guests'][guest] = new_token
 
+        self.replan_time += time.time() - tick
+
     def get_time(self):
         return self.time
 
     def get_algo_time(self):
         return self.algo_time
+
+    def get_replan_time(self):
+        return self.replan_time
+
+    def get_model_fit_time(self):
+        return self.occupancy_model.get_fit_time()
+
+    def get_model_inference_time(self):
+        return self.occupancy_model.get_inference_time()
+
+    def get_model_inference_time_for_replan(self):
+        return self.occupancy_model.get_inference_time_for_replan()
 
     def get_actual_paths(self):
         return self.actual_paths

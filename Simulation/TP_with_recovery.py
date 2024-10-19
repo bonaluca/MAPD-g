@@ -516,7 +516,7 @@ class TokenPassingRecovery(object):
                 self.current_pos_guests(guest['name']) in self.surroundings(guest_name)
         ])
 
-    def plan_for_guest(self, guest, start, goal, time_start=0, avoid_nearby_agents=False, ignore_guests=[]):
+    def plan_for_guest(self, guest, start, goal, time_start=0, avoid_nearby_agents=False, ignore_guests=[], is_replanning=False):
         """Plan for a single guest from a start to a goal location.
 
         Parameters
@@ -609,7 +609,8 @@ class TokenPassingRecovery(object):
             time_start=time_start,
             weight_function=self.simulation.weight_function,
             occupancy_model=self.simulation.occupancy_model,
-            low_level_algo=self.simulation.guest_algorithm
+            low_level_algo=self.simulation.guest_algorithm,
+            is_replanning=is_replanning
         )
         cbs = CBS(env)
         path = self.search(cbs)

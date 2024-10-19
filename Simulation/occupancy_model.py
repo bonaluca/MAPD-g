@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import re
+import time
 from os import path
 from itertools import product
 from scipy import sparse
@@ -653,9 +654,15 @@ class OccupancyModel(object):
 
         self.prob_occ = np.zeros((self.width, self.height))
         self.obs_counts = 0
+        self.fit_time = 0
+        self.inference_time = 0
+        self.inference_time_for_replan = 0
 
     def fit(self, agent_paths, **kwargs):
         """Estimate the probability of occupancy of the grid cells."""
+
+        # Tick
+        tock = self.tick()
 
         # Filter out empty agent paths
         agent_paths = dict(filter(
@@ -680,10 +687,24 @@ class OccupancyModel(object):
                 self.prob_occ[step['x']][step['y']] += 1
         self.prob_occ /= self.obs_counts
 
-    def predict(self, location, time):
+        # Tock
+        self.fit_time += self.tick() - tock
+
+    def predict(self, location, time, is_replanning=False):
         """Return the probability of occupancy of a location at time t."""
 
-        return self.prob_occ[location[0]][location[1]]
+        # Tick
+        tock = self.tick()
+
+        prob = self.prob_occ[location[0]][location[1]]
+
+        # Tock
+        if not is_replanning:
+            self.inference_time += self.tick() - tock
+        else:
+            self.inference_time_for_replan += self.tick() - tock
+
+        return prob
 
     def time_forward(self, free_locations=[], seen_agents={}):
         """Collect observations coming from guests."""
@@ -719,6 +740,19 @@ class OccupancyModel(object):
         This method exists just for backward compatibility
         """
         return np.rot90(self.prob_occ, k=1, axes=(0, 1)).tolist()
+
+    def get_fit_time(self):
+        return self.fit_time
+
+    def get_inference_time(self):
+        return self.inference_time
+
+    def get_inference_time_for_replan(self):
+        return self.inference_time_for_replan
+
+    def tick(self):
+        """Return the current time"""
+        return time.time()
 
 class OracleModel(OccupancyModel):
     """Oracle model that knows the exact plans of the agents."""
@@ -804,6 +838,9 @@ class MarkovianOccupancyModel(OccupancyModel):
     def fit(self, agent_paths, set_initial_belief=False):
         """Fit the transition probabilities of the Markov chains."""
 
+        # Tick
+        tock = self.tick()
+
         for agent, paths in agent_paths.items():
             # Split into contiguous chunks
             chunk_idxs = [
@@ -831,19 +868,36 @@ class MarkovianOccupancyModel(OccupancyModel):
 
         self._not_fitted = False
 
-    def predict(self, location, time):
+        # Tock
+        self.fit_time += self.tick() - tock
+
+    def predict(self, location, time, is_replanning=False):
         """Return the probability of occupancy of a location at time t."""
 
         if self._not_fitted:
             raise NotFittedError("Model not fitted")
 
-        return self.compute_t_step_prediction(time)[tuple(location)]
+        # Tick
+        tock = self.tick()
+
+        prob = self.compute_t_step_prediction(time)[tuple(location)]
+
+        # Tock
+        if not is_replanning:
+            self.inference_time += self.tick() - tock
+        else:
+            self.inference_time_for_replan += self.tick() - tock
+
+        return prob
 
     def time_forward(self, free_locations=[], seen_agents={}):
         """Collect observations coming from guests."""
 
         if self._not_fitted:
             raise NotFittedError("Model not fitted")
+
+        # Tick
+        tock = self.tick()
 
         # Flush cache
         self._predict_cache = [None] * self.cache_entries
@@ -854,6 +908,9 @@ class MarkovianOccupancyModel(OccupancyModel):
             initial_state = self.agent_beliefs[agent_name]
             new_belief = model.time_forward(initial_state, free_locations=free_locations, busy_location=agent_location)
             self.agent_beliefs[agent_name] = new_belief
+
+        # Tock
+        self.inference_time += self.tick() - tock
 
     def compute_t_step_prediction(self, t):
         """"Compute and cache the t-step model prediction."""
