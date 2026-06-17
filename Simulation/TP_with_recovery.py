@@ -188,9 +188,7 @@ class TokenPassingRecovery(object):
         """Return the positions of the agents that are still as obstacles."""
         obstacles = set()
         for path in agents_paths:
-            if len(path) == 1:
-                obstacles.add((path[0][0], path[0][1]))
-            if 1 < len(path) <= time_start:
+            if 0 <= len(path) - 1 <= time_start:
                 obstacles.add((path[-1][0], path[-1][1]))
         return obstacles
 
@@ -437,6 +435,14 @@ class TokenPassingRecovery(object):
             self.token['guests'][guest_name] = []
             for el in path_to_non_task_endpoint[guest_name]:
                 self.token['guests'][guest_name].append([el['x'], el['y']])
+
+        # Update 'guests_to_tasks' with 'safe_idle' task
+        self.token['guests_to_tasks'][guest_name] = {
+            'task_name': 'safe_idle',
+            'start': guest_pos,
+            'goal': closest_non_task_endpoint,
+            'predicted_cost': 0
+        }
 
     # def get_random_close_cell_guest(self, guest_pos, r):
     #     while True:
