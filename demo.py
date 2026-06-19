@@ -63,11 +63,11 @@ if __name__ == '__main__':
             print(exc)
 
     dimensions = param['map']['dimensions']
-    obstacles = param['map']['obstacles']
-    non_task_endpoints = param['map']['non_task_endpoints']
-    non_task_endpoints_guests = param['map']['non_task_endpoints_guests']
-    delivery_agents = param['map']['delivery_agents']
-    delivery_guests = param['map']['delivery_guests']
+    obstacles = list(map(lambda x: tuple(x), param['map']['obstacles']))
+    non_task_endpoints = list(map(lambda x: tuple(x), param['map']['non_task_endpoints']))
+    non_task_endpoints_guests = list(map(lambda x: tuple(x), param['map']['non_task_endpoints_guests']))
+    delivery_agents = list(map(lambda x: tuple(x), param['map']['delivery_agents']))
+    delivery_guests = list(map(lambda x: tuple(x), param['map']['delivery_guests']))
     obstacles_agents = obstacles+non_task_endpoints_guests+delivery_guests
     obstacles_guests = obstacles+non_task_endpoints+delivery_agents
     agents = param['agents']
