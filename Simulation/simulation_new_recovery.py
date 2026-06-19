@@ -134,19 +134,6 @@ class SimulationNewRecovery(object):
         moving_guests = [guest for guest in guests \
                 if len(algorithm.get_token()['guests'][guest]) > 1]
 
-        #we create for the agents and for the guests a dictionary in which each agent/guest (key) is associated to a list (value)
-        #containing the current position of the agent/guest and the next position
-
-        to_add = []
-        for guest_ep in self.guests:
-            current_guest_pos_ep = self.actual_paths_guests[guest_ep['name']][-1] #current_guest_pos tells us the current position of the guest
-            if tuple([current_guest_pos_ep['x'], current_guest_pos_ep['y']]) in non_task_endpoints_guests:
-                to_add.append(tuple([current_guest_pos_ep['x'], current_guest_pos_ep['y']]))
-            if guest_ep['name'] in algorithm.get_token()['guests_to_tasks']:
-                if algorithm.get_token()['guests_to_tasks'][guest_ep['name']]['goal'] in non_task_endpoints_guests:
-                    to_add.append(tuple(algorithm.get_token()['guests_to_tasks'][guest_ep['name']]['goal']))
-        algorithm.get_token()['occupied_non_task_endpoints_guests'] = set(to_add)
-
         # Helpers
         location_within_grid = lambda loc: \
             0 <= loc[0] < dimensions[0] and 0 <= loc[1] < dimensions[1]

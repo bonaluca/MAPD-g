@@ -29,6 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('-alpha', help='Parameter for balance between distance and occupancy', default=None, type=float)
     parser.add_argument('-map_name', help='Name of map chosen', default=None, type=str)
     parser.add_argument('-obs_time', help='Observation time of guests agents', default=300, type=int)
+    parser.add_argument('-strict_idle', help='Guests can idle only at non-task endpoints', action='store_true')
     parser.add_argument('-order', help='Order of the model', default=0, type=int, choices=[0, 1, 2, 3])
     parser.add_argument('-smoothing', help='Apply smoothing to the transition matrix', action='store_true')
     parser.add_argument('-d', help='Output directory', default='output')
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     observation_time=args.obs_time
     tp = TokenPassingRecovery(agents, guests, dimensions, obstacles_agents, obstacles_guests, non_task_endpoints, non_task_endpoints_guests, simulation,
                               a_star_max_iter=args.a_star_max_iter, k=args.k, pd=args.pd, p_max=args.p, p_iter=args.p_iter,
-                              new_recovery=True)
+                              new_recovery=True, strict_idle=args.strict_idle)
     
     
     while (tp.get_completed_tasks() != len(tasks) or tp.get_completed_tasks_guest() != len(tasks_guest)):

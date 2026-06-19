@@ -12,7 +12,7 @@ class TokenPassingRecovery(object):
     random.seed(1234)
     def __init__(self, agents, guests, dimesions, obstacles_agents, obstacles_guests, 
                 non_task_endpoints, non_task_endpoints_guests, simulation, a_star_max_iter=4000, 
-                k=0,pd=None, p_max=1, p_iter=1, new_recovery=False):
+                k=0,pd=None, p_max=1, p_iter=1, new_recovery=False, strict_idle=False):
         self.agents = agents
         self.guests = guests
         self.dimensions = dimesions
@@ -61,6 +61,7 @@ class TokenPassingRecovery(object):
             self.pd = None
             self.p_iter = 1
         self.new_recovery = new_recovery
+        self.strict_idle = strict_idle
         self.init_token()
 
     def init_token(self):
@@ -185,6 +186,10 @@ class TokenPassingRecovery(object):
 
     def check_safe_idle_guest(self, agent_pos):
         """Check if the guest is on a cell that is the pick-up / delivery of a task."""
+
+        if self.strict_idle and tuple(agent_pos) not in self.non_task_endpoints_guests:
+            return False
+
         for task in self.token['tasks_guest'].items():
             if tuple(task[0]) == tuple(agent_pos) or tuple(task[1]) == tuple(agent_pos):
                 return False
@@ -529,6 +534,19 @@ class TokenPassingRecovery(object):
         ])
 
     def time_forward(self):
+        self.token['occupied_non_task_endpoints_guests'] = set(filter(
+            lambda endpoint:
+                endpoint in [
+                    self.current_pos_guests(guest['name'])
+                    for guest in self.guests
+                ] or
+                endpoint in [
+                    tuple(self.token['guests_to_tasks'][guest_name]['goal'])
+                    for guest_name in self.token['guests_to_tasks']
+                ],
+            self.non_task_endpoints_guests
+        ))
+
         # Update completed tasks for the agents
         for agent_name in self.token['agents']:
             pos = self.simulation.actual_paths[agent_name][-1]
@@ -721,8 +739,8 @@ class TokenPassingRecovery(object):
             available_tasks = {}
             for task_name, task in self.token['tasks_guest'].items():
                 task_start, task_goal = tuple(task[0]), tuple(task[1])
-                if task_start not in self.token['path_ends'].difference({tuple(guest_pos)}) \
-                        and task_goal not in self.token['path_ends'].difference({tuple(guest_pos)}) \
+                if task_start not in self.token['path_ends_guest'].difference({tuple(guest_pos)}) \
+                        and task_goal not in self.token['path_ends_guest'].difference({tuple(guest_pos)}) \
                         and task_start not in self.get_guests_to_tasks_goals() \
                         and task_goal not in self.get_guests_to_tasks_goals():
                     available_tasks[task_name] = task
@@ -782,8 +800,8 @@ class TokenPassingRecovery(object):
                         else:
                             task = closest_task
                         last_step = path_to_task_goal[guest_name][-1]
-                        self.update_ends(guest_pos)
-                        self.token['path_ends'].add(tuple([last_step['x'], last_step['y']]))
+                        self.update_ends_guests(guest_pos)
+                        self.token['path_ends_guest'].add(tuple([last_step['x'], last_step['y']]))
                         self.token['guests_to_tasks'][guest_name] = {'task_name': closest_task_name, 'start': task[0],
                                                                     'goal': task[1], 'predicted_cost': cost1 + cost2}
                         self.token['guests'][guest_name] = []
@@ -793,10 +811,10 @@ class TokenPassingRecovery(object):
                         self.token['guests'][guest_name] = self.token['guests'][guest_name][:-1]
                         for el in path_to_task_goal[guest_name]:
                             self.token['guests'][guest_name].append([el['x'], el['y']])
-            elif self.check_safe_idle(guest_pos):
+            elif self.check_safe_idle_guest(guest_pos):
                 logging.info('No available tasks for guest %s idling at current position...', guest_name)
             else:
-                self.go_to_closest_non_task_endpoint(guest_name, guest_pos, all_idle_guests)
+                self.go_to_closest_non_task_endpoint_guest(guest_name, guest_pos, all_idle_guests)
             
         #GUESTS 
         
