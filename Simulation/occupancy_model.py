@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import re
+from os import path
 from itertools import product
 from scipy import sparse
 from Simulation.exceptions import NotFittedError
@@ -566,6 +567,41 @@ class MarkovChain(object):
         belief[initial_state_idx] = 1
         return belief
 
+    def load(self, filename):
+        """Load model parameters from file."""
+
+        count_matrix = sparse.load_npz(filename)
+
+        self.obs_counts = np.ravel(count_matrix.sum(axis=0))
+        self._transition_matrix = self._make_stochastic(count_matrix)
+        self._not_fitted = False
+        self.cache.flush()
+
+    def save(self, filename, compressed=True):
+        """Save model parameter to file."""
+
+        # Turn transition matrix into integer counts
+        obs_count_diag = sparse.diags(self.obs_counts, dtype=np.int32, format="csr")
+        count_matrix = self._transition_matrix.dot(obs_count_diag)
+        count_matrix = sparse.csr_matrix(np.rint(count_matrix), dtype=np.int32)
+
+        arrays_dict = {}
+        arrays_dict.update(
+            indices=count_matrix.indices,
+            indptr=count_matrix.indptr,
+            format=count_matrix.format.encode('ascii'),
+            shape=count_matrix.shape,
+            data=count_matrix.data,
+            valid_states=self.valid_states
+        )
+        if compressed:
+            np.savez_compressed(filename, **arrays_dict)
+        else:
+            np.savez(filename, **arrays_dict)
+
+    def get_obs_counts(self):
+        return int(sum(self.obs_counts))
+
 class OccupancyModel(object):
     """Simple occupancy model."""
 
@@ -576,9 +612,17 @@ class OccupancyModel(object):
         self.n_agents = len(self.agent_names)
 
         self.prob_occ = np.zeros((self.width, self.height))
+        self.obs_counts = 0
 
-    def fit(self, agent_paths):
+    def fit(self, agent_paths, **kwargs):
         """Estimate the probability of occupancy of the grid cells."""
+
+        # Filter out empty agent paths
+        agent_paths = dict(filter(
+            lambda item: item[1], agent_paths.items()
+        ))
+        if not agent_paths:
+            return
 
         # Compute observation time
         max_t = max([max(path, key=lambda step: step['t'])['t'] \
@@ -587,11 +631,14 @@ class OccupancyModel(object):
             for path in agent_paths.values()])
         observation_time = max_t - min_t + 1
 
-        # Compute probability of occupancy
+        # Update probability of occupancy
+        self.prob_occ *= self.obs_counts
+        self.obs_counts += observation_time
+
         for agent_path in agent_paths.values():
             for step in agent_path:
                 self.prob_occ[step['x']][step['y']] += 1
-        self.prob_occ /= observation_time
+        self.prob_occ /= self.obs_counts
 
     def predict(self, location, time):
         """Return the probability of occupancy of a location at time t."""
@@ -602,6 +649,26 @@ class OccupancyModel(object):
         """Collect observations coming from guests."""
 
         pass
+
+    def load(self, file):
+        """Load model parameters from file."""
+
+        file, extension = path.splitext(file)
+        if extension == '':
+            extension = '.npz'
+        file = file + extension
+
+        data = np.load(file)
+        self.prob_occ = data['occupancy_matrix']
+        self.obs_counts = int(data['obs_counts'])
+
+    def save(self, file):
+        """Save model parameters to file."""
+
+        np.savez_compressed(file, occupancy_matrix=self.prob_occ, obs_counts=self.obs_counts)
+
+    def get_obs_counts(self):
+        return self.obs_counts
 
     def get_probability_matrix(self):
         return self.prob_occ.tolist()
@@ -761,6 +828,48 @@ class MarkovianOccupancyModel(OccupancyModel):
             }
             logging.debug("Occupancy model: cached aggregate predictions at time %d" % t)
             return prediction
+
+    def load(self, file):
+        """Load agent models from file."""
+
+        filename, extension = path.splitext(file)
+        if extension == '':
+            extension = '.npz'
+
+        if not self.shared:
+            for agent_name, model in self.agent_models.items():
+                file = filename + '_' + agent_name + extension
+                model.load(file)
+            return
+
+        file = filename + extension
+        for model in self.agent_models.values():
+            model.load(file)
+
+        self._not_fitted = False
+
+    def save(self, file):
+        """Save agent models to file."""
+
+        filename, extension = path.splitext(file)
+        if extension == '':
+            extension = '.npz'
+
+        if not self.shared:
+            for agent_name, model in self.agent_models.items():
+                file = filename + '_' + agent_name + extension
+                model.save(file)
+            return
+
+        file = filename + extension
+        model = next((m for m in self.agent_models.values()))
+        model.save(file)
+
+    def get_obs_counts(self):
+        if self.shared:
+            model = next((m for m in self.agent_models.values()))
+            return model.get_obs_counts()
+        return sum([m.get_obs_counts() for m in self.agent_models.values()])
 
     @staticmethod
     def aggregate_beliefs(beliefs):

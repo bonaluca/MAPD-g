@@ -35,6 +35,8 @@ if __name__ == '__main__':
     parser.add_argument('-smoothing', help='Apply smoothing to the transition matrix', action='store_true')
     parser.add_argument('-d', help='Output directory', default='output')
     parser.add_argument('-log', help='Log level of the application', default='WARN', type=str)
+    parser.add_argument('-load', help='Load model parameters from file', dest='load_filename', metavar='FILE', type=str)
+    parser.add_argument('-save', help='Load model parameters from file', dest='save_filename', metavar='FILE', type=str)
 
     args = parser.parse_args()
 
@@ -47,15 +49,20 @@ if __name__ == '__main__':
     log_num_level = getattr(logging, args.log.upper(), logging.WARN)
     logging.basicConfig(level=log_num_level, format='[%(levelname)s]: %(message)s')
 
-    with open(os.path.join(RoothPath.get_root(), 'config.json'), 'r') as json_file:
-        config = json.load(json_file)
-    args.param = os.path.join(RoothPath.get_root(), os.path.join(config['input_path'], str(args.map_name)))
-
     args.output = os.path.join(RoothPath.get_root(), args.d)
     if not os.path.exists(args.output):
         os.mkdir(args.output)
     args.output = os.path.join(args.output, str(args.alpha)+'-'+str(args.map_name))
 
+    # Saved model filename
+    if args.save_filename is not None:
+        map_name = os.path.splitext(args.map_name)[0]
+        alpha = str(args.alpha).replace('.', '')
+        args.save_filename += '_a' + alpha + '_' + map_name
+
+    with open(os.path.join(RoothPath.get_root(), 'config.json'), 'r') as json_file:
+        config = json.load(json_file)
+    args.param = os.path.join(RoothPath.get_root(), os.path.join(config['input_path'], str(args.map_name)))
 
     # Read from input file
     with open(args.param, 'r') as param_file:
@@ -100,6 +107,10 @@ if __name__ == '__main__':
             order=args.order, cache_size="1G", backoff=args.smoothing
         )
 
+    # Load model from file
+    if args.load_filename is not None:
+        occupancy_model.load(args.load_filename)
+
     # Simulate
     simulation = SimulationNewRecovery(tasks, tasks_guest, agents, guests, occupancy_model, alpha=args.alpha)
     a_star_max_iter = 4000
@@ -122,6 +133,13 @@ if __name__ == '__main__':
         if simulation.time == 3000:
             logging.warning('Simulation timeout elapsed')
             break
+
+    # Save model
+    if args.save_filename is not None:
+        if args.realistic:
+            data = simulation.get_agent_sightings(from_time = last_fit + 1 - args.order)
+            occupancy_model.fit(data)
+        occupancy_model.save(args.save_filename)
 
     if simulation.deadlock == False:
 
@@ -159,8 +177,6 @@ if __name__ == '__main__':
 
         team_cost = max(tp.get_completed_tasks_times().values()) - min([time for time in simulation.start_times if time > observation_time])
         team_cost_guest = max(tp.get_completed_tasks_times_guest().values()) - min(simulation.start_times_guests)
-
-        #print(schedule_guests)
 
         counter_moves_guests = {}
         for guest in schedule_guests[0]:
