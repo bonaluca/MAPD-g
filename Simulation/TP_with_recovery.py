@@ -148,8 +148,7 @@ class TokenPassingRecovery(object):
                 closest = task_name
         return closest
 
-    #it returns the paths of the agents / guests that are moving as obstacles
-    def get_moving_obstacles_agents(self, agents, time_start):
+    def get_moving_obstacles(self, agents, time_start):
         """Return the paths of moving agents as obstacles."""
         obstacles = {}
         for name, path in agents.items():
@@ -166,25 +165,7 @@ class TokenPassingRecovery(object):
                         obstacles[(path[i][0], path[i][1], -k)] = name
         return obstacles
 
-    def get_moving_obstacles_guests(self, guests, time_start):
-        """Return the paths of moving guests as obstacles."""
-        obstacles = {}
-        for name, path in guests.items():
-            if len(path) > time_start and len(path) > 1:
-                for i in range(time_start, len(path)):
-                    k = i - time_start
-                    obstacles[(path[i][0], path[i][1], k)] = name
-                    for j in range(1, self.k + 1):
-                        if i - j >= time_start:
-                            obstacles[(path[i][0], path[i][1], k - j)] = name
-                        obstacles[(path[i][0], path[i][1], k + j)] = name
-                    # Mark last element with negative time to later turn it into idle obstacle
-                    if i == len(path) - 1:
-                        obstacles[(path[i][0], path[i][1], -k)] = name
-        return obstacles
-
-    #it returns the positions of the agents / guests that are still as obstacles
-    def get_idle_obstacles_agents(self, agents_paths, time_start):
+    def get_idle_obstacles(self, agents_paths, time_start):
         """Return the positions of the agents that are still as obstacles."""
         obstacles = set()
         for path in agents_paths:
@@ -192,17 +173,6 @@ class TokenPassingRecovery(object):
                 obstacles.add((path[-1][0], path[-1][1]))
         return obstacles
 
-    def get_idle_obstacles_guests(self, guests_paths, time_start):
-        """Return the positions of the guests that are still as obstacles."""
-        obstacles = set()
-        for path in guests_paths:
-            if len(path) == 1:
-                obstacles.add((path[0][0], path[0][1]))
-            if 1 < len(path) <= time_start:
-                obstacles.add((path[-1][0], path[-1][1]))
-        return obstacles
-
-    #it checks if the agent / guest is on a cell that is the pick-up / delivery of a task
     def check_safe_idle(self, agent_pos):
         """Check if the agent is on a cell that is the pick-up / delivery of a task."""
         for task in self.token['tasks'].items():
@@ -223,7 +193,6 @@ class TokenPassingRecovery(object):
                 return False
         return True
 
-    #it returns the closest endpoint according to the defined heuristic
     def get_closest_non_task_endpoint(self, agent_pos):
         """Return the closest endpoint according to the defined heuristic."""
         dist = -1
@@ -262,7 +231,6 @@ class TokenPassingRecovery(object):
             exit(1)
         return res
 
-    #update of path ends for agents / guests
     def update_ends(self, agent_pos):
         """Update of path ends for agents."""
         if tuple(agent_pos) in self.token['path_ends']:
@@ -339,8 +307,8 @@ class TokenPassingRecovery(object):
 
     def go_to_closest_non_task_endpoint(self, agent_name, agent_pos, all_idle_agents):
         closest_non_task_endpoint = self.get_closest_non_task_endpoint(agent_pos)
-        moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], 0)
-        idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 0)
+        moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], 0)
+        idle_obstacles_agents = self.get_idle_obstacles(all_idle_agents.values(), 0)
         agent = {'name': agent_name, 'start': agent_pos, 'goal': closest_non_task_endpoint}
         env = Environment(self.dimensions, [agent], self.obstacles_agents | idle_obstacles_agents, moving_obstacles_agents,
                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_agents())
@@ -364,8 +332,8 @@ class TokenPassingRecovery(object):
         closest_non_task_endpoint = self.get_closest_non_task_endpoint_guests(guest_pos)
         j = self.token['guests'].copy()
         j.pop(guest_name)
-        moving_obstacles_guests = self.get_moving_obstacles_guests(j, 0)
-        idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+        moving_obstacles_guests = self.get_moving_obstacles(j, 0)
+        idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(), 0)
         guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
         env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests(),
@@ -391,8 +359,8 @@ class TokenPassingRecovery(object):
         closest_non_task_endpoint = self.get_closest_non_task_endpoint_guests(guest_pos)
         j = self.token['guests'].copy()
         j.pop(guest_name)
-        moving_obstacles_guests = self.get_moving_obstacles_guests(j, 0)
-        idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+        moving_obstacles_guests = self.get_moving_obstacles(j, 0)
+        idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(), 0)
         guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
         env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests(),
@@ -419,8 +387,8 @@ class TokenPassingRecovery(object):
         closest_non_task_endpoint = self.get_closest_non_task_endpoint_guests(guest_pos)
         j = self.token['guests'].copy()
         j.pop(guest_name)
-        moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'].copy(), 0)
-        idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+        moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'].copy(), 0)
+        idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(), 0)
         guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
         env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests(),
@@ -473,8 +441,8 @@ class TokenPassingRecovery(object):
     #     if self.token['deadlock_count_per_agent'][agent_name] >= 5:
     #         self.token['deadlock_count_per_agent'][agent_name] = 0
     #         random_close_cell = self.get_random_close_cell(agent_pos, r)
-    #         moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], 0)
-    #         idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 0)
+    #         moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], 0)
+    #         idle_obstacles_agents = self.get_idle_obstacles(all_idle_agents.values(), 0)
     #         agent = {'name': agent_name, 'start': agent_pos, 'goal': random_close_cell}
     #         env = Environment(self.dimensions, [agent], self.obstacles_agents | idle_obstacles_agents, moving_obstacles_agents,
     #                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_agents())
@@ -495,8 +463,8 @@ class TokenPassingRecovery(object):
     #     if self.token['deadlock_count_per_guest'][guest_name] >= 5:
     #         self.token['deadlock_count_per_guest'][guest_name] = 0
     #         random_close_cell = self.get_random_close_cell_guest(guest_pos, r)
-    #         moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'], 0)
-    #         idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+    #         moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], 0)
+    #         idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(), 0)
     #         guest = {'name': guest_name, 'start': guest_pos, 'goal': random_close_cell}
     #         env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
     #                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
@@ -632,8 +600,8 @@ class TokenPassingRecovery(object):
                     closest_task = [self.token['agents_to_tasks'][agent_name]['start'],
                             self.token['agents_to_tasks'][agent_name]['goal']]
                 logging.info('task_assegnato agente %s', str(closest_task))
-                moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], 0)
-                idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 0)
+                moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], 0)
+                idle_obstacles_agents = self.get_idle_obstacles(all_idle_agents.values(), 0)
                 #print('moving_obstacles_agents PER START1',moving_obstacles_agents)
                 #print('TOKEN',self.token['agents'])
                 agent = {'name': agent_name, 'start': agent_pos, 'goal': closest_task[0]}
@@ -650,14 +618,15 @@ class TokenPassingRecovery(object):
                     #print('path_to_task_start',path_to_task_start)
                     cost1 = env.compute_solution_cost(path_to_task_start)
                     # Use cost - 1 because idle cost is 1
-                    moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], cost1 - 1)
-                    idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 
+                    moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], cost1 - 1)
+                    idle_obstacles_agents = self.get_idle_obstacles(all_idle_agents.values(),
                                                                         cost1 - 1)
                     #print('moving_obstacles_agents PER GOAL1',moving_obstacles_agents)
                     #print('TOKEN',self.token['agents'])
                     agent = {'name': agent_name, 'start': closest_task[0], 'goal': closest_task[1]}
                     env = Environment(self.dimensions, [agent], self.obstacles_agents | idle_obstacles_agents,
-                                    moving_obstacles_agents, a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_agents())
+                                    moving_obstacles_agents, a_star_max_iter=self.a_star_max_iter,
+                                    time_start=time_start, graph=self.simulation.get_graph_agents())
                     cbs = CBS(env)
                     path_to_task_goal = self.search(cbs)
                     #print('path_to_task_goal',path_to_task_goal)
@@ -719,8 +688,8 @@ class TokenPassingRecovery(object):
                             self.token['guests_to_tasks'][guest_name]['goal']]
                 self.token['assigned_tasks_times_guest'][closest_task_name] = self.simulation.get_time()
                 logging.info('task_assegnato %s', str(closest_task))
-                moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'], 0)
-                idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+                moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], 0)
+                idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(), 0)
                 guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_task[0]}
                 env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
                                 moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter,
@@ -738,8 +707,8 @@ class TokenPassingRecovery(object):
                     #print('path_to_task_start',path_to_task_start)
                     cost1 = env.compute_solution_cost(path_to_task_start)
                     # Use cost - 1 because idle cost is 1
-                    moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'], cost1 - 1)
-                    idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 
+                    moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], cost1 - 1)
+                    idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(),
                                                                         cost1 - 1)
                     guest = {'name': guest_name, 'start': closest_task[0], 'goal': closest_task[1]}
                     env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
