@@ -480,6 +480,47 @@ class TokenPassingRecovery(object):
     #             for el in path_to_non_task_endpoint[guest_name]:
     #                 self.token['guests'][guest_name].append([el['x'], el['y']])
 
+    @property
+    def free_guests(self):
+        return [guest for guest in self.guests \
+            if len(self.token['guests'][guest['name']]) == 1]
+
+    @property
+    def occupied_guests(self):
+        return [guest for guest in self.guests \
+            if len(self.token['guests'][guest['name']]) > 1]
+
+    def current_pos_agents(self, agent_name):
+        return tuple(self.token['agents'][agent_name][0])
+
+    def current_pos_guests(self, guest_name):
+        return tuple(self.token['guests'][guest_name][0])
+
+    def next_pos_agents(self, agent_name):
+        return tuple(self.token['agents'][agent_name][:2][-1])
+
+    def next_pos_guests(self, guest_name):
+        return tuple(self.token['guests'][guest_name][:2][-1])
+
+    def surroundings(self, guest_name):
+        location_within_grid = lambda loc: \
+            0 <= loc[0] < self.dimensions[0] and 0 <= loc[1] < self.dimensions[1]
+        surroundings_of = lambda loc: set(filter(
+            lambda loc: location_within_grid(loc) and not loc in self.obstacles_agents,
+            [
+                (loc[0]-2, loc[1]), (loc[0]-1, loc[1]-1), (loc[0]-1, loc[1]), (loc[0]-1, loc[1]+1),
+                (loc[0], loc[1]-2), (loc[0], loc[1]-1), (loc[0], loc[1]), (loc[0], loc[1]+1), (loc[0], loc[1]+2),
+                (loc[0]+1, loc[1]-1), (loc[0]+1, loc[1]), (loc[0]+1, loc[1]+1), (loc[0]+2, loc[1])
+            ]
+        ))
+        return surroundings_of(self.current_pos_guests(guest_name))
+
+    def agents_nearby(self, guest_name):
+        return set([
+            agent['name'] for agent in self.agents
+            if self.current_pos_agents(agent['name']) in self.surroundings(guest_name)
+        ])
+
     def time_forward(self):
         # Update completed tasks for the agents
         for agent_name in self.token['agents']:
