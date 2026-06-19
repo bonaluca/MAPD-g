@@ -123,7 +123,8 @@ if __name__ == '__main__':
     else:
         occupancy_model = MarkovianOccupancyModel(
             *dimensions, agents, obstacles=obstacles_agents, prune_thres=args.prune_thres,
-            order=args.order, cache_size=args.cache_size, backoff=args.smoothing
+            order=args.order, cache_size=args.cache_size, backoff=args.smoothing,
+            init_policy=args.init_policy
         )
 
     # Load model from file

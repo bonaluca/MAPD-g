@@ -69,7 +69,7 @@ class Cache:
 
 class MarkovChain(object):
 
-    def __init__(self, width, height, obstacles=None, order=1, prune_thres=None, cache_size=None):
+    def __init__(self, width, height, obstacles=None, order=1, prune_thres=None, cache_size=None, init_policy='random'):
         self.width = width
         self.height = height
         self.n_states = self.width * self.height
@@ -78,6 +78,7 @@ class MarkovChain(object):
         self.prune_thres = prune_thres
         self._not_fitted = True
         self._backoff_in_use = False
+        self.init_policy = init_policy
 
         location_valid = lambda l: l not in self.obstacles \
             and (0 <= l[0] < self.width) \
@@ -350,7 +351,7 @@ class MarkovChain(object):
         state = sum_matrix.dot(state)
         return state.reshape((self.width, self.height))
 
-    def _make_stochastic(self, matrix, policy='random', eps=0.7):
+    def _make_stochastic(self, matrix, policy=None, eps=0.7):
         """Return a stochastic matrix.
 
         :param policy:
@@ -364,6 +365,9 @@ class MarkovChain(object):
             eps probability is uniformly distributed on the rest of the moves,
             excluding staying still (equivalent to 'random' for 1st order).
         """
+
+        if policy is None:
+            policy = self.init_policy
 
         # Make sure all columns are non-null
         sum_cols = np.ravel(matrix.sum(axis=0))
@@ -740,7 +744,8 @@ class MarkovianOccupancyModel(OccupancyModel):
     """Markovian occupancy model."""
 
     def __init__(self, width, height, agents, obstacles=None, order=1,
-        cache_size=None, prune_thres=None, shared=True, backoff=False):
+        cache_size=None, prune_thres=None, shared=True, backoff=False,
+        init_policy='random'):
         super().__init__(width, height, agents)
 
         self.order = order
@@ -770,7 +775,8 @@ class MarkovianOccupancyModel(OccupancyModel):
             # Agents share the same markov chain
             mc = MarkovChain(
                 self.width, self.height, obstacles=obstacles,
-                cache_size=self.mc_cache_size, prune_thres=prune_thres, order=self.order
+                cache_size=self.mc_cache_size, prune_thres=prune_thres, order=self.order,
+                init_policy=init_policy
             )
             self.agent_models = {
                 name: mc for name in self.agent_names
@@ -780,7 +786,8 @@ class MarkovianOccupancyModel(OccupancyModel):
                     name:
                     MarkovChain(
                         self.width, self.height, obstacles=obstacles,
-                        cache_size=self.mc_cache_size, prune_thres=prune_thres, order=self.order
+                        cache_size=self.mc_cache_size, prune_thres=prune_thres, order=self.order,
+                        init_policy=init_policy
                     )
                 for name in self.agent_names
             }
