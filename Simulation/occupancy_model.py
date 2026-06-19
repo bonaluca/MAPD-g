@@ -76,6 +76,7 @@ class MarkovChain(object):
         self.n_states = self.width * self.height
         self.order = order
         self._not_fitted = True
+        self._backoff_in_use = False
         self.obstacles = obstacles or []
 
         location_valid = lambda l: l not in self.obstacles \
@@ -113,16 +114,8 @@ class MarkovChain(object):
         self.n_valid_states = sum(1 for state in self.valid_states)
 
         # Allocating transition matrix
-        col_ind = list(self.state_idx.values())
-        row_ind = [
-            self.state_idx[tuple((*state[1:], state[-1]))]
-            for state in self.state_idx.keys()
-        ]
-        data = (self.n_valid_states) * [1, ]
-        self.transition_matrix = sparse.csr_matrix(
-            (data, (row_ind, col_ind)),
-            shape=2 * (self.n_valid_states, ),
-            dtype=np.float64
+        self._transition_matrix = self._make_stochastic(
+            sparse.csr_matrix(2 * (self.n_valid_states, ), dtype=np.float64)
         )
 
         self.obs_counts = np.zeros((self.n_valid_states, ), dtype=int)
@@ -130,6 +123,12 @@ class MarkovChain(object):
         # Lazy caching of the powers of the transition matrix
         self.cache = Cache(cache_size)
         self._last_computation = None
+
+    @property
+    def transition_matrix(self):
+        if self._backoff_in_use:
+            return self._backoff_matrix
+        return self._transition_matrix
 
     def is_valid_transition(self, state, next_state):
         if state[1:] != next_state[:-1]:
@@ -142,7 +141,7 @@ class MarkovChain(object):
         self.cache.flush()
 
         # Cumulating occurrences
-        occurrences = sparse.dok_matrix(self.transition_matrix.shape, dtype=int)
+        occurrences = sparse.dok_matrix(self._transition_matrix.shape, dtype=int)
         state_sequence = zip(*[sequence[i:] for i in range(self.order)])
         for state, next_loc in zip(state_sequence, sequence[self.order:]):
             next_state = tuple((*state[1:], next_loc))
@@ -177,7 +176,7 @@ class MarkovChain(object):
         diag_inv_counts = sparse.diags(inv_counts, dtype=np.float64)
 
         # Update rule
-        self.transition_matrix = self.transition_matrix.dot(diag_count_frac) + \
+        self._transition_matrix = self._transition_matrix.dot(diag_count_frac) + \
             occurrences.dot(diag_inv_counts)
 
         # Cumulating observation counts
@@ -268,6 +267,9 @@ class MarkovChain(object):
             logging.warning('Markov chain belief vanished!')
             # Recover by assuming agent is wherever but in free_locations
             belief = row_selector.dot(self.obs_counts)
+        if belief.sum() == 0:
+            # Recover by assuming uniform belief
+            belief = np.ones((self.n_valid_states, )) / self.n_valid_states
 
         belief /= belief.sum() # Normalize
         return belief
@@ -339,8 +341,223 @@ class MarkovChain(object):
         state = sum_matrix.dot(state)
         return state.reshape((self.width, self.height))
 
-    def get_initial_belief(self, sequence):
+    def _make_stochastic(self, matrix, policy='random', eps=0.7):
+        """Return a stochastic matrix.
+
+        :param policy:
+            - Specifying 'random' in case a column is full of zeros, the
+            probability is uniformly distributed on all possible moves,
+            excluding staying still.
+            - Specifying 'selfloop' in case a column is full of zeros, all
+            probability is given to the self-loop.
+            - Speciying 'heading' in case a column is full of zeros, 1 - eps
+            probability is given to the move that maintains the direction and
+            eps probability is uniformly distributed on the rest of the moves,
+            excluding staying still (equivalent to 'random' for 1st order).
+        """
+
+        # Make sure all columns are non-null
+        sum_cols = np.ravel(matrix.sum(axis=0))
+        null_cols = np.where(sum_cols == 0)[0].tolist()
+        if policy == 'selfloop':
+            # Give 100% probability to the self-loop
+            col_ind = null_cols
+            row_ind = [self.state_idx[tuple((*s[1:], s[-1]))]
+                    for s in map(lambda j: self.valid_states[j], col_ind)]
+            data = len(col_ind) * [1,]
+        elif policy == 'random':
+            col_ind = []
+            row_ind = []
+            data = []
+            # Spread probability uniformly over valid (non-stopping) next states
+            for col_idx in null_cols:
+                start_state = self.valid_states[col_idx]
+                valid_next_states = list(map(lambda t: t[1],
+                    filter(lambda t: \
+                    t[0] == start_state and t[1] != start_state,
+                    self.valid_transitions)
+                ))
+                for next_state in valid_next_states:
+                    col_ind.append(col_idx)
+                    row_ind.append(self.state_idx[next_state])
+                    data.append(1. / len(valid_next_states))
+        elif policy == 'heading':
+            # TODO @bonaluca
+            raise NotImplementedError()
+        else:
+            raise ValueError(f'Unknown policy {policy}')
+        missing_prob = sparse.csr_matrix((data, (row_ind, col_ind)),
+                shape=matrix.shape, dtype=np.float64)
+        matrix += missing_prob
+
+        # Normalize
+        sum_cols = np.ravel(matrix.sum(axis=0))
+        inv_sum_diag = sparse.diags(sum_cols ** -1, dtype=np.float64)
+        return matrix.dot(inv_sum_diag)
+
+    @staticmethod
+    def good_turing(freq_of_freqs):
+        """Simple Good-Turing smoothing.
+
+        Geoffrey Sampson (2005): http://www.grsampson.net/D_SGT.c
+        """
+
+        # Computing frequency N_r of frequencies r
+        r = list(freq_of_freqs.keys())
+        N_r = list(freq_of_freqs.values())
+
+        if len(r) < 2:
+            return {r: r for r in r}
+
+        # Quantity Z_r
+        q = [0,] + r[:-1]
+        t = r[1:] + [2 * r[-1] - r[-2]]
+        Z_r = [2 * Nr / (t - q) for (q, Nr, t) in zip(q, N_r, t)]
+
+        # Least-squares fit in log-log space
+        log_r = np.log(r)
+        mean_r = np.mean(log_r)
+        log_r = log_r - mean_r
+
+        log_z = np.log(Z_r)
+        mean_z = np.mean(log_z)
+        log_z = log_z - mean_z
+
+        x_squares = np.sum(log_r ** 2)
+        xys = np.sum(log_r * log_z)
+        slope = xys / x_squares
+        intercept = mean_z - slope * mean_r
+
+        # Smoothing: S(N_r) = exp{intercept + slope * log(r)}
+        smooth = lambda r: (r ** slope) * np.exp(intercept)
+        r_star = {r: (r + 1) * smooth(r + 1) / smooth(r) for r in r}
+
+        return r_star
+
+    def backoff(self):
+        """Apply Katz backoff."""
+
+        # Compute ngram counts
+        obs_count_diag = sparse.diags(self.obs_counts, dtype=np.float64, format="csr")
+        ngram_counts = self._transition_matrix.dot(obs_count_diag)
+
+        # Compute frequency N_r of frequencies r
+        nonzero_counts = np.rint(ngram_counts.data)
+        #nonzero_counts = np.ravel(ngram_counts[ngram_counts.nonzero()])
+        obs_count_freqs = np.bincount(np.array(nonzero_counts, dtype=int))
+        freq_of_freqs = {
+            r: obs_count_freqs[r]
+            for r in np.nonzero(obs_count_freqs)[0]
+        }
+
+        # Simple Good-Turing discount
+        r_star = MarkovChain.good_turing(freq_of_freqs)
+
+        # Discounted probabilities matrix
+        discounted_counts = list(map(lambda r: r_star[r], nonzero_counts))
+        discounted_matrix = sparse.csr_matrix((discounted_counts, ngram_counts.nonzero()),
+                shape=self._transition_matrix.shape, dtype=np.float64)
+        inv_counts = [1/c if c != 0 else 0 for c in self.obs_counts]
+        inv_counts_diag = sparse.diags(inv_counts, dtype=np.float64, format="csr")
+        discounted_matrix = discounted_matrix.dot(inv_counts_diag)
+
+        # Leftover probability
+        leftover = 1 - np.ravel(discounted_matrix.sum(axis=0))
+
+        # k-gram conditional probabilities P(w_n | w_n-1, ...)
+        kgram_counts = self.obs_counts
+        backoff_prob = np.zeros(self.obs_counts.shape, dtype=np.float64)
+        k_states = self.valid_states
+        for k in range(1, self.order + 1):
+            # Aggregate counts with same history (with repetition)
+            history = list(map(lambda state: state[:-1], k_states))
+            k_blocks, km1_blocks = [], []
+            hist_elem = history[0]
+            km1_states = [hist_elem, ]
+            count = 1
+            for elem in history[1:]:
+                if elem != hist_elem:
+                    k_blocks.append(np.ones(2 * (count, ), dtype=int))
+                    km1_blocks.append(np.ones((1, count), dtype=int))
+                    hist_elem = elem
+                    km1_states.append(hist_elem)
+                    count = 1
+                else:
+                    count += 1
+            k_blocks.append(np.ones(2 * (count, ), dtype=int))
+            km1_blocks.append(np.ones((1, count), dtype=int))
+
+            k_block_diag = sparse.block_diag(k_blocks, format="csr")
+            if k == 1:
+                n_block_diag = k_block_diag
+            km1_block_diag = sparse.block_diag(km1_blocks, format="csr")
+            sum_counts = k_block_diag.dot(kgram_counts)
+
+            # Compute kgram conditional probabilities
+            sum_counts = np.where(sum_counts == 0, 1, sum_counts) # Prevent division by 0
+            kgram_prob = kgram_counts / sum_counts
+
+            # Backoff: estimate zero probabilities by conditioning on shorter history
+            where_bo_zero = np.where(backoff_prob == 0)[0]
+            kgram_idxs = [k_states.index(self.valid_states[i][k-1:]) for i in where_bo_zero]
+            backoff_prob[where_bo_zero] = kgram_prob[kgram_idxs]
+
+            # Reshape for following iteration
+            k_states = km1_states
+            kgram_counts = km1_block_diag.dot(kgram_counts)
+
+        # Strongly discourage giving probability to idle moves
+        non_idle_diag = list(map(
+            lambda state: 1 if len(state) == 1 or state[-1] != state[-2] else 0,
+            self.valid_states
+        ))
+        non_idle = sparse.diags(non_idle_diag, dtype=np.float64)
+        backoff_prob = non_idle.dot(backoff_prob)
+
+        # Normalize backoff probability
+        sum_prob = n_block_diag.dot(backoff_prob)
+        sum_prob = np.where(sum_prob == 0, 1, sum_prob) # Prevent division by 0
+        backoff_prob = backoff_prob / sum_prob
+
+        # Construct backoff matrix
+
+        nonzero_counts_idx = [(i, j) for i, j in zip(*ngram_counts.nonzero())]
+        nonzero_counts_idx += [2 * (self.n_valid_states, ), ]
+        nonzero_counts_idx.sort(key=lambda t: t[1] * self.n_valid_states + t[0])
+        k = 0
+        data, row_ind, col_ind = [], [], []
+        for j, i in sorted(map(
+            lambda t: (self.state_idx[t[0]], self.state_idx[t[1]]),
+            self.valid_transitions),
+            key=lambda x: x[0] * self.n_valid_states + x[1]):
+            nzi, nzj = nonzero_counts_idx[k]
+            if j < nzj or (j == nzj and i < nzi):
+                row_ind += [i,]
+                col_ind += [j,]
+                data += [backoff_prob[i],]
+            else:
+                k += 1
+        backoff_matrix = sparse.csr_matrix((data, (row_ind, col_ind)),
+            shape=self._transition_matrix.shape, dtype=np.float64)
+
+        # Normalize to leftover probability
+        sum_prob = np.ravel(backoff_matrix.sum(axis=0))
+        sum_prob = np.where(sum_prob == 0, 1, sum_prob) # Prevent division by 0
+        leftover_diag = sparse.diags(leftover / sum_prob, dtype=np.float64)
+        backoff_matrix = backoff_matrix.dot(leftover_diag)
+
+        # Update transition matrix
+        backoff_matrix += discounted_matrix
+        self._backoff_matrix = self._make_stochastic(backoff_matrix)
+        self._backoff_in_use = True
+
+    def get_initial_belief(self, sequence=None):
         """Return a vector representing the initial belief of the markov chain."""
+
+        if sequence is None:
+            # Uniform belief over valid states
+            return np.ones((self.n_valid_states, ), dtype=np.float64) \
+                * (1 / self.n_valid_states)
 
         n_fill = self.order - len(sequence)
         if n_fill > 0:
@@ -423,11 +640,12 @@ class OracleModel(OccupancyModel):
 class MarkovianOccupancyModel(OccupancyModel):
     """Markovian occupancy model."""
 
-    def __init__(self, width, height, agents, obstacles=None, order=1, cache_size=None, shared=True):
+    def __init__(self, width, height, agents, obstacles=None, order=1, cache_size=None, shared=True, backoff=False):
         super().__init__(width, height, agents)
 
         self.order = order
         self.shared = shared
+        self.backoff = backoff
 
         # Sizing cache
         cache_size_bytes = cache_size if type(cache_size) == int else 0
@@ -461,19 +679,39 @@ class MarkovianOccupancyModel(OccupancyModel):
                 for name in self.agent_names
             }
 
-    def fit(self, agent_paths):
+        # Initial belief is uniform over the whole map
+        self.agent_beliefs = {
+            agent: self.agent_models[agent].get_initial_belief()
+            for agent in self.agent_names
+        }
+
+    def fit(self, agent_paths, set_initial_belief=False):
         """Fit the transition probabilities of the Markov chains."""
 
-        self.agent_beliefs = {}
+        for agent, paths in agent_paths.items():
+            # Split into contiguous chunks
+            chunk_idxs = [
+                i + 1 for i, (prev, cur) in enumerate(zip(paths, paths[1:]))
+                if cur['t'] != prev['t'] + 1
+            ]
 
-        for agent in agent_paths.keys():
-            # Fitting Markov chains
-            path = list(map(lambda p: (p['x'], p['y']), agent_paths[agent]))
-            self.agent_models[agent].fit(path)
+            contiguous_chunks = [
+                paths[start:end]
+                for start, end in zip([0] + chunk_idxs, chunk_idxs + [len(paths)])
+            ]
+
+            # Fit Markov chain
+            for chunk in contiguous_chunks:
+                path = list(map(lambda p: (p['x'], p['y']), chunk))
+                self.agent_models[agent].fit(path)
 
             # Initial belief from last known locations
-            self.agent_beliefs[agent] = \
-                self.agent_models[agent].get_initial_belief(path)
+            if set_initial_belief:
+                self.agent_beliefs[agent] = \
+                    self.agent_models[agent].get_initial_belief(path)
+
+            if self.backoff:
+                self.agent_models[agent].backoff()
 
         self._not_fitted = False
 

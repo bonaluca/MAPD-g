@@ -30,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('-map_name', help='Name of map chosen', default=None, type=str)
     parser.add_argument('-obs_time', help='Observation time of guests agents', default=300, type=int)
     parser.add_argument('-order', help='Order of the model', default=0, type=int, choices=[0, 1, 2, 3])
+    parser.add_argument('-smoothing', help='Apply smoothing to the transition matrix', action='store_true')
     parser.add_argument('-d', help='Output directory', default='output')
     parser.add_argument('-log', help='Log level of the application', default='WARN', type=str)
 
@@ -85,7 +86,7 @@ if __name__ == '__main__':
     else:
         occupancy_model = MarkovianOccupancyModel(
             *dimensions, agents, obstacles=obstacles_agents,
-            order=args.order, cache_size="1G"
+            order=args.order, cache_size="1G", backoff=args.smoothing
         )
 
     # Simulate
