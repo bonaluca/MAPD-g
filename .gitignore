@@ -1,3 +1,21 @@
+# Output directory
+/output
+
+# yaml_tmp map files
+Environments/*.yaml_tmp
+
+# VS Code
+.vscode/
+
+# Mac OS
+**/.DS_Store
+
+# Vim
+**/*.swp
+
+# .doc files
+**/.docx
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
