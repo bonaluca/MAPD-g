@@ -657,7 +657,7 @@ class SimulationNewRecovery(object):
                 ignore_guests=ignore_guests
             )
 
-            for el in path_to_task_start[guest][:-1]:
+            for el in path_to_task_start[:-1]:
                 new_token.append([el['x'], el['y']])
             total_cost += cost
             time_start = cost - 1
@@ -671,7 +671,7 @@ class SimulationNewRecovery(object):
             ignore_guests=ignore_guests
         )
 
-        for el in path_to_task_goal[guest]:
+        for el in path_to_task_goal:
             new_token.append([el['x'], el['y']])
         total_cost += cost
         prev_path_end = algorithm.get_token()['guests'][guest][-1]

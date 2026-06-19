@@ -354,7 +354,9 @@ class MarkovChain(object):
     def _make_stochastic(self, matrix, policy=None, eps=0.7):
         """Return a stochastic matrix.
 
-        :param policy:
+        Parameters
+        ----------
+        policy : str
             - Specifying 'random' in case a column is full of zeros, the
             probability is uniformly distributed on all possible moves,
             excluding staying still.

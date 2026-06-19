@@ -46,6 +46,8 @@ if __name__ == '__main__':
     parser.add_argument('-full_sight', help='Guests know where agents are after each step', action='store_true')
     parser.add_argument('-fit_every', help='Number of timesteps to wait between model updates', dest='fit_interval',
                         default=50, type=int)
+    parser.add_argument('-replan_every', help='Number of timesteps after which guest agents can update their plans',
+                        dest='guest_replan_wnd', type=int)
     parser.add_argument('-load', help='Load model parameters from file', dest='load_filename', metavar='FILE', type=str)
     parser.add_argument('-save', help='Load model parameters from file', dest='save_filename', metavar='FILE', type=str)
 
@@ -145,6 +147,7 @@ if __name__ == '__main__':
     tp = TokenPassingRecovery(
         agents, guests, dimensions, obstacles_agents, obstacles_guests,
         non_task_endpoints, non_task_endpoints_guests, simulation,
+        guest_replan_wnd=args.guest_replan_wnd,
         a_star_max_iter=args.a_star_max_iter, k=args.k, pd=args.pd,
         p_max=args.p, p_iter=args.p_iter, new_recovery=True, strict_idle=args.strict_idle
     )

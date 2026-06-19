@@ -12,11 +12,12 @@ from Simulation.exceptions import PathNotFoundError
 class TokenPassingRecovery(object):
     random.seed(1234)
     def __init__(self, agents, guests, dimesions, obstacles_agents, obstacles_guests, 
-                non_task_endpoints, non_task_endpoints_guests, simulation, a_star_max_iter=4000, 
-                k=0,pd=None, p_max=1, p_iter=1, new_recovery=False, strict_idle=False):
+                non_task_endpoints, non_task_endpoints_guests, simulation, guest_replan_wnd=None,
+                a_star_max_iter=4000, k=0,pd=None, p_max=1, p_iter=1, new_recovery=False, strict_idle=False):
         self.agents = agents
         self.guests = guests
         self.dimensions = dimesions
+        self.guest_replan_wnd = guest_replan_wnd
         self.obstacles_agents = set(obstacles_agents)
         self.obstacles_guests = set(obstacles_guests)
         self.non_task_endpoints = non_task_endpoints
@@ -135,6 +136,13 @@ class TokenPassingRecovery(object):
                 if len(path) == 1:
                     guests[name] = path
         return guests
+
+    def get_busy_guests(self):
+        return {
+            name: path
+            for name, path in self.token['guests'].items()
+            if name in self.token['guests_to_tasks']
+        }
 
     #the admissible heuristic chosen in the Manhattan distance
     def admissible_heuristic(self, task_pos, agent_pos):
@@ -510,7 +518,34 @@ class TokenPassingRecovery(object):
     def plan_for_guest(self, guest, start, goal, time_start=0, avoid_nearby_agents=False, ignore_guests=[]):
         """Plan for a single guest from a start to a goal location.
 
-        Return a tuple containing a plan and its cost.
+        Parameters
+        ----------
+        guest : str
+            Name of the guest agent for whom the plan is intended.
+        start : 2D tuple or list of int
+            Start location of the plan.
+        goal : 2D tuple or list of int
+            End location of the plan.
+        time_start : int, default 0
+            Time at which the agent will reach the `start` location.
+        avoid_nearby_agents : bool, default False
+            If True, the plan will avoid collisions with home agents
+            that are at most 2 steps away from `guest`.
+        ignore_guests : list of str, optional
+            Names of guest agents with whom conflicts will be
+            ignored during planning.
+
+        Returns
+        -------
+        path : list of list of int
+            A valid plan to reach `goal`
+        cost : int
+            Cost of the plan
+
+        Raises
+        ------
+        PathNotFoundError
+            If a path from `start` to `goal` cannot be found.
         """
 
         other_guests_path = self.token['guests'].copy()
@@ -572,9 +607,9 @@ class TokenPassingRecovery(object):
             logging.info("PLANNING - Solution not found to task start for %s...", guest)
             raise PathNotFoundError()
 
-        logging.info("PLANNING - Solution found to task start for %s, searching solution to task goal...", guest)
+        logging.info("PLANNING - Solution found to task start for %s ...", guest)
         cost = env.compute_solution_cost(path)
-        return path, cost
+        return path[guest], cost
 
     def update_occupied_non_task_endpoints(self):
         self.token['occupied_non_task_endpoints'] = dict(filter(
@@ -808,13 +843,54 @@ class TokenPassingRecovery(object):
                 self.go_to_closest_non_task_endpoint(agent_name, agent_pos, all_idle_agents)
 
         #GUESTS
-        idle_guests = self.get_idle_guests() #prendo gli agenti che oziano
-        while len(idle_guests) > 0:
-            guest_name = list(idle_guests.keys())[0]
+
+        # Guests' path refresh
+        busy_guests = self.get_busy_guests() if self.guest_replan_wnd is not None else []
+        for guest in busy_guests:
+            task = self.token['guests_to_tasks'][guest]
+            task_name = task['task_name']
+            elapsed_time = self.simulation.get_time() - self.token['assigned_tasks_times_guest'][task_name]
+
+            if elapsed_time % self.guest_replan_wnd != 0:
+                continue
+
+            # Replan in light of more recent info
+            logging.info("REFRESH PLAN for %s", guest)
+            start_location = self.current_pos_guests(guest)
+            time_start = 0
+            total_cost = 0
+
+            # Plan to task start if not yet reached
+            new_path = []
+            if task['start'] in self.token['guests'][guest][1:]:
+                path_to_task_start, cost = self.plan_for_guest(
+                    guest, start_location, task['start'],
+                )
+
+                new_path += path_to_task_start[:-1]
+
+                total_cost += cost
+                time_start = len(path_to_task_start) - 1
+                start_location = task['start']
+
+            # Plan to task goal
+            path_to_task_goal, cost = self.plan_for_guest(
+                guest, start_location, task['goal'], time_start=time_start
+            )
+
+            new_path += path_to_task_goal
+            new_token = list(map(lambda el: [el['x'], el['y']], new_path))
+            total_cost += cost
+
+            # Update data structure and token
+            task['predicted_cost'] = total_cost
+            self.token['guests'][guest] = new_token
+
+
+        idle_guests = self.get_idle_guests()
+        for guest_name in idle_guests:
             # `guest_name` executes now
-            all_idle_guests = self.token['guests'].copy()
-            all_idle_guests.pop(guest_name)
-            guest_pos = idle_guests.pop(guest_name)[0]
+            guest_pos = self.current_pos_guests(guest_name)
 
             # Collect tasks such that no other path in token ends in task_start or task_goal
             available_tasks = {}
@@ -826,92 +902,62 @@ class TokenPassingRecovery(object):
                         and task_goal not in self.get_guests_to_tasks_goals():
                     available_tasks[task_name] = task
 
-            if len(available_tasks) > 0 or guest_name in self.token['guests_to_tasks']:
-                if guest_name not in self.token['guests_to_tasks']:
-                    closest_task_name = self.get_closest_task_name(available_tasks, guest_pos)
-                    closest_task = available_tasks[closest_task_name]
-                else:
-                    closest_task_name = self.token['guests_to_tasks'][guest_name]['task_name']
-                    closest_task = [self.token['guests_to_tasks'][guest_name]['start'],
-                            self.token['guests_to_tasks'][guest_name]['goal']]
-                self.token['assigned_tasks_times_guest'][closest_task_name] = self.simulation.get_time()
-                logging.info('task_assegnato %s', str(closest_task))
-                moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], 0)
-                idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(), 0)
-                if self.strict_idle:
-                    # Avoid non-task endpoints unless it's the goal
-                    idle_obstacles_guests |= set(self.non_task_endpoints_guests) - {tuple(guest_pos), tuple(closest_task[0])}
-                else:
-                    # Avoid delivery endpoints unless it's the goal
-                    idle_obstacles_guests |= set(self.simulation.delivery_guests) - {tuple(guest_pos), tuple(closest_task[0])}
-                guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_task[0]}
-                env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
-                                moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter,
-                                graph=self.simulation.get_graph_guests(),
-                                weight_function=self.simulation.weight_function,
-                                occupancy_model=self.simulation.occupancy_model,
-                                low_level_algo=self.simulation.guest_algorithm)
-                cbs = CBS(env)
-                path_to_task_start = self.search(cbs)
-                #print('path_to_task_start',path_to_task_start)
-                if not path_to_task_start:
-                    logging.info("Solution not found to task start for guest %s idling at current position...", guest_name)
-                        # exit(1)
-                else:
-                    logging.info("Solution found to task start for guest %s searching solution to task goal...", guest_name)
-                    #print('path_to_task_start',path_to_task_start)
-                    cost1 = env.compute_solution_cost(path_to_task_start)
-                    time_start = cost1 - 1
-                    # Use cost - 1 because idle cost is 1
-                    moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], time_start)
-                    idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(),
-                                                                        time_start)
-                    if self.strict_idle:
-                        # Avoid non-task endpoints unless it's the goal
-                        idle_obstacles_guests |= set(self.non_task_endpoints_guests) - {tuple(closest_task[0]), tuple(closest_task[1])}
-                    else:
-                        # Avoid delivery endpoints unless it's the goal
-                        idle_obstacles_guests |= set(self.simulation.delivery_guests) - {tuple(closest_task[0]), tuple(closest_task[1])}
-                    guest = {'name': guest_name, 'start': closest_task[0], 'goal': closest_task[1]}
-                    env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
-                                    moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter, time_start=time_start,
-                                    graph=self.simulation.get_graph_guests(),
-                                    weight_function=self.simulation.weight_function,
-                                    occupancy_model=self.simulation.occupancy_model,
-                                    low_level_algo=self.simulation.guest_algorithm)
-                    cbs = CBS(env)
-                    path_to_task_goal = self.search(cbs)
-                    #print('path_to_task_goal',path_to_task_goal)
-                    if not path_to_task_goal:
-                        logging.info("Solution not found to task goal for guest %s idling at current position...", guest_name)
-                            # exit(1)
-                    else:
-                        logging.info("Solution found to task goal for guest %s doing task...", guest_name)
-                        #print('path_to_task_goal',path_to_task_goal)
-                        cost2 = env.compute_solution_cost(path_to_task_goal)
-                        if guest_name not in self.token['guests_to_tasks']:
-                            self.token['tasks_guest'].pop(closest_task_name)
-                            task = available_tasks.pop(closest_task_name)
-                        else:
-                            task = closest_task
-                        last_step = path_to_task_goal[guest_name][-1]
-                        self.update_ends_guests(guest_pos)
-                        self.token['path_ends_guest'].add(tuple([last_step['x'], last_step['y']]))
-                        self.token['guests_to_tasks'][guest_name] = {'task_name': closest_task_name, 'start': task[0],
-                                                                    'goal': task[1], 'predicted_cost': cost1 + cost2}
-                        self.token['predicted_tasks_times_guest'].update({closest_task_name: cost1 + cost2})
-                        self.token['guests'][guest_name] = []
-                        for el in path_to_task_start[guest_name]:
-                            self.token['guests'][guest_name].append([el['x'], el['y']])
-                        # Don't repeat twice same step
-                        self.token['guests'][guest_name] = self.token['guests'][guest_name][:-1]
-                        for el in path_to_task_goal[guest_name]:
-                            self.token['guests'][guest_name].append([el['x'], el['y']])
-            elif self.check_safe_idle_guest(guest_pos):
-                logging.info('No available tasks for guest %s idling at current position...', guest_name)
+            if len(available_tasks) == 0:
+                continue
+
+            if guest_name not in self.token['guests_to_tasks']:
+                closest_task_name = self.get_closest_task_name(available_tasks, guest_pos)
+                closest_task = available_tasks[closest_task_name]
             else:
-                self.go_to_closest_non_task_endpoint_guest(guest_name, avoid_nearby_agents=True)
-            
+                # Can never happen, right?
+                closest_task_name = self.token['guests_to_tasks'][guest_name]['task_name']
+                closest_task = [self.token['guests_to_tasks'][guest_name]['start'],
+                        self.token['guests_to_tasks'][guest_name]['goal']]
+
+            logging.info('Assigned task %s to %s', str(closest_task), guest_name)
+
+            try:
+                # Plan from current position to task start
+                path_to_task_start, cost1 = self.plan_for_guest(guest_name, guest_pos, closest_task[0])
+                logging.info("Solution found to task start for guest %s searching solution to task goal...", guest_name)
+
+                # Plan from task start to task goal
+                time_start = len(path_to_task_start) - 1
+                path_to_task_goal, cost2 = self.plan_for_guest(guest_name, closest_task[0], closest_task[1], time_start=time_start)
+                logging.info("Solution found to task goal for guest %s doing task...", guest_name)
+
+                # Update data structures
+                self.token['assigned_tasks_times_guest'][closest_task_name] = self.simulation.get_time()
+                if guest_name not in self.token['guests_to_tasks']:
+                    self.token['tasks_guest'].pop(closest_task_name)
+                    task = available_tasks.pop(closest_task_name)
+                else:
+                    task = closest_task
+                self.update_ends_guests(guest_pos)
+                last_step = path_to_task_goal[-1]
+                self.token['path_ends_guest'].add((last_step['x'], last_step['y']))
+                self.token['guests_to_tasks'][guest_name] = {'task_name': closest_task_name, 'start': task[0],
+                                                            'goal': task[1], 'predicted_cost': cost1 + cost2}
+                self.token['predicted_tasks_times_guest'].update({closest_task_name: cost1 + cost2})
+
+                # Update token
+                token = path_to_task_start[:-1] + path_to_task_goal
+                token = list(map(lambda tup: [tup['x'], tup['y']], token))
+                self.token['guests'][guest_name] = token
+
+            except PathNotFoundError:
+                logging.info("Solution not found for guest %s ...", guest_name)
+
+        # We are past the assignment phase: idle guests will remain unassigned
+        unassigned_guests = self.get_idle_guests()
+        for guest in unassigned_guests:
+            guest_pos = self.current_pos_guests(guest)
+            if self.check_safe_idle_guest(guest_pos):
+                logging.info('No available tasks for guest %s idling at current position...', guest)
+            else:
+                self.go_to_closest_non_task_endpoint_guest(guest, avoid_nearby_agents=True)
+
+
         #GUESTS 
         
         # Advance along paths in the token agents
