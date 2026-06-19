@@ -282,6 +282,29 @@ class Environment(object):
     def compute_solution_cost(self, solution):
         return sum([len(path) for path in solution.values()])
 
+class DynamicEnvironment(Environment):
+    """Environment with occupancy model"""
+
+    def __init__(self, dimension, agents, obstacles, moving_obstacles=None, a_star_max_iter=-1,
+    graph=None, weight_function=None, occupancy_model=None):
+        super().__init__(dimension, agents, obstacles, moving_obstacles, a_star_max_iter, graph)
+
+        self.weight_function = weight_function
+        self.occupancy_model = occupancy_model
+        #self.a_star = Dijkstra(self)
+
+    def get_edge_weight(self, u, v):
+        """Return the weight of the edge between states u and v."""
+
+        prob_occ = self.occupancy_model.predict((v.location.x, v.location.y), v.time)
+
+        u = (u.location.x, u.location.y)
+        v = (v.location.x, v.location.y)
+        # TODO @bonaluca: maybe deal with nx.NodeNotFound() exception
+        distance = self.graph.get_edge_data(u, v, 0).get('weight', 1)
+        weight = self.weight_function(distance, prob_occ)
+        return weight
+
 class HighLevelNode(object):
     def __init__(self):
         self.solution = {}

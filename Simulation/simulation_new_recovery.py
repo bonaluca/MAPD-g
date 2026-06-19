@@ -1,28 +1,20 @@
-import argparse
-from turtle import pos
-import yaml
-import json
-import os
 import logging
 import time
 import random
 from math import fabs
-import numpy as np
 import networkx as nx
-import seaborn as sns
-from collections import defaultdict
-from Simulation.TP_with_recovery import TokenPassingRecovery
-import RoothPath
-from Simulation.CBS.cbs import CBS, Environment
+from Simulation.CBS.cbs import CBS, DynamicEnvironment
+from Simulation.occupancy_model import NotFittedError
 
 
 class SimulationNewRecovery(object):
     random.seed(1234)
-    def __init__(self, tasks, tasks_guest, agents, guests, alpha):
+    def __init__(self, tasks, tasks_guest, agents, guests, occupancy_model, alpha):
         self.tasks = tasks #tasks of the agents
         self.tasks_guest = tasks_guest #tasks of the guests
         self.agents = agents #the agents
         self.guests = guests #the guests
+        self.occupancy_model = occupancy_model #the occupancy model of the agents
         self.alpha = alpha
         self.time = 0 #initialization of the time steps of the algorithm
         self.start_times = [] #it is a list that cointains the starting time of the tasks
@@ -54,21 +46,7 @@ class SimulationNewRecovery(object):
     # time_forward is the method in which the agents are effectly moved and the time is shifted one step ahead
     def time_forward(self, algorithm, dimensions, non_task_endpoints_guests, obstacles, obstacles_agents, obstacles_guests, a_star_max_iter,observation_time):
 
-        #if self.time == 0:
-            #print('Residential matrix inizialization')
-            #elist_agents = []
-            #for i in range(0,dimensions[0]):
-            #    for j in range(0,dimensions[1]):
-            #        if (i,j) not in obstacles_agents:
-            #            for k in range(0,dimensions[0]):
-            #                for l in range(0,dimensions[1]):
-            #                    if (k,l) not in obstacles_agents:
-            #                        if (abs(k-i)==1 and abs(j-l)==0) or (abs(k-i)==0 and abs(j-l)==1) or (abs(k-i)==0 and abs(j-l)==0):
-            #                            elist_agents.append(((i,j),(k,l),1))
-            
-            #self.G_agents = nx.MultiDiGraph()
-            #self.G_agents.add_weighted_edges_from(elist_agents)
-        
+        # TODO @bonaluca: this should not be in here
         if self.time == 0:
             logging.info('Residential matrix inizialization')
             elist_agents = []
@@ -89,98 +67,42 @@ class SimulationNewRecovery(object):
             self.G_agents.add_weighted_edges_from(elist_agents)
     
             #print(elist_agents)
-            #print(self.G_agents)
+            logging.debug(self.G_agents)
+
+            logging.info('Guest matrix inizialization')
+            elist_guest = []
+            for i in range(0,dimensions[0]):
+                for j in range(0,dimensions[1]):
+                    if (i,j) not in obstacles_guests:
+                        if (i+1,j) not in obstacles_guests and i+1 < dimensions[0]:
+                            elist_guest.append(((i,j),(i+1,j), 1))
+                        if (i-1,j) not in obstacles_guests and i-1 > -1:
+                            elist_guest.append(((i,j),(i-1,j), 1))
+                        if (i,j-1) not in obstacles_guests and j-1 > -1:
+                            elist_guest.append(((i,j),(i,j-1), 1))
+                        if (i,j+1) not in obstacles_guests and j+1 < dimensions[1]:
+                            elist_guest.append(((i,j),(i,j+1), 1))
+                        if (i,j) not in obstacles_guests:
+                            elist_guest.append(((i,j),(i,j), 1))
+            self.G_guests = nx.MultiDiGraph()
+            self.G_guests.add_weighted_edges_from(elist_guest)
+
+            diam_g = nx.diameter(self.G_guests)
+
+            logging.debug(self.G_agents)
+            logging.debug('Graph diameter: %s' % diam_g)
+
+            # Weight function that balances distance and probability of occupancy
+            if self.alpha != 1:
+                self.weight_function = lambda dist, prob_occ: \
+                    ((1 - self.alpha) * dist) / diam_g + self.alpha * prob_occ
+            else:
+                # Prevent zero cost edges
+                self.weight_function = lambda dist, prob_occ: \
+                    max(prob_occ, 5e-4)
 
         self.time = self.time + 1
         logging.info('Time: %s', self.time)
-
-
-        if self.time < observation_time:
-            self.G_guests = None
-
-        if self.time == observation_time:
-            logging.info('Guest matrix inizialization')
-            mat = np.zeros((dimensions[0],dimensions[1]))
-            for agent_path in self.actual_paths.values():
-                for step in agent_path:
-                    mat[step['x']][step['y']] += 1
-            mat=mat/(len(self.agents)*observation_time)
-            mat90=np.rot90(mat, k=1, axes=(0, 1))
-            self.prob_mat=mat90.tolist()
-            mat2 = mat.copy()
-
-            elist_struct = []
-            for i in range(0,dimensions[0]):
-                for j in range(0,dimensions[1]):
-                    if (i,j) not in obstacles_guests:
-                        if (i+1,j) not in obstacles_guests and i+1 < dimensions[0]:
-                            elist_struct.append(((i,j),(i+1,j)))
-
-                        if (i-1,j) not in obstacles_guests and i-1 > -1:
-                            elist_struct.append(((i,j),(i-1,j)))
-
-                        if (i,j-1) not in obstacles_guests and j-1 > -1:
-                            elist_struct.append(((i,j),(i,j-1)))
-
-                        if (i,j+1) not in obstacles_guests and j+1 < dimensions[1]:
-                            elist_struct.append(((i,j),(i,j+1)))
-
-                        if (i,j) not in obstacles_guests:
-                            elist_struct.append(((i,j),(i,j)))
-            G_guests_struct = nx.MultiDiGraph()
-            G_guests_struct.add_edges_from(elist_struct)
-
-            diam_g = nx.diameter(G_guests_struct)
-
-            elist_guests = []
-            for i in range(0,dimensions[0]):
-                for j in range(0,dimensions[1]):
-                    if (i,j) not in obstacles_guests:
-                        if (i+1,j) not in obstacles_guests and i+1 < dimensions[0]:
-                            if mat[i+1][j] == 0 and self.alpha == 1:
-                                elist_guests.append(((i,j),(i+1,j),((1-self.alpha)/diam_g)+(self.alpha*0.0005)))
-                                mat2[i+1][j] = self.alpha*0.0005 + ((1-self.alpha)/diam_g)
-                            else:
-                                elist_guests.append(((i,j),(i+1,j),((1-self.alpha)/diam_g)+(self.alpha*mat[i+1][j])))
-                                mat2[i+1][j] = self.alpha*mat[i+1][j] + ((1-self.alpha)/diam_g)
-
-                        if (i-1,j) not in obstacles_guests and i-1 > -1:
-                            if mat[i-1][j] == 0 and self.alpha == 1:
-                                elist_guests.append(((i,j),(i-1,j),((1-self.alpha)/diam_g)+(self.alpha*0.0005)))
-                                mat2[i-1][j] = self.alpha*0.0005 + ((1-self.alpha)/diam_g)
-                            else:
-                                elist_guests.append(((i,j),(i-1,j),((1-self.alpha)/diam_g)+(self.alpha*mat[i-1][j])))
-                                mat2[i-1][j] = self.alpha*mat[i-1][j] + ((1-self.alpha)/diam_g)
-
-                        if (i,j-1) not in obstacles_guests and j-1 > -1:
-                            if mat[i][j-1] == 0 and self.alpha == 1:
-                                elist_guests.append(((i,j),(i,j-1),((1-self.alpha)/diam_g)+(self.alpha*0.0005)))
-                                mat2[i][j-1] = self.alpha*0.0005 + ((1-self.alpha)/diam_g)
-                            else:
-                                elist_guests.append(((i,j),(i,j-1),((1-self.alpha)/diam_g)+(self.alpha*mat[i][j-1])))
-                                mat2[i][j-1] = self.alpha*mat[i][j-1] + ((1-self.alpha)/diam_g)
-
-                        if (i,j+1) not in obstacles_guests and j+1 < dimensions[1]:
-                            if mat[i][j+1] == 0 and self.alpha == 1:
-                                elist_guests.append(((i,j),(i,j+1),((1-self.alpha)/diam_g)+(self.alpha*0.0005)))
-                                mat2[i][j+1] = self.alpha*0.0005 + ((1-self.alpha)/diam_g)
-                            else:
-                                elist_guests.append(((i,j),(i,j+1),((1-self.alpha)/diam_g)+(self.alpha*mat[i][j+1])))
-                                mat2[i][j+1] = self.alpha*mat[i][j+1] + ((1-self.alpha)/diam_g)    
-
-                        if (i,j) not in obstacles_guests:
-                            if mat[i][j] == 0 and self.alpha == 1:
-                                elist_guests.append(((i,j),(i,j),((1-self.alpha)/diam_g)+(self.alpha*0.0005)))
-                                mat2[i][j] = self.alpha*0.0005 + ((1-self.alpha)/diam_g)
-                            else:
-                                elist_guests.append(((i,j),(i,j),((1-self.alpha)/diam_g)+(self.alpha*mat[i][j])))
-                                mat2[i][j] = self.alpha*mat[i][j] + ((1-self.alpha)/diam_g)
-
-            mat2=np.rot90(mat2, k=1, axes=(0, 1))
-            logging.info(mat2.tolist())
-            self.G_guests = nx.MultiDiGraph()
-            self.G_guests.add_weighted_edges_from(elist_guests)
-        
 
 
         #keep track of the effective time in seconds to perform the tp algorithm
@@ -265,6 +187,7 @@ class SimulationNewRecovery(object):
                                         tuple([current_guest_pos['x']-1, current_guest_pos['y']]), tuple([current_guest_pos['x'], current_guest_pos['y']+1]), 
                                         tuple([current_guest_pos['x'], current_guest_pos['y']-1])]
                 
+                # TODO @bonaluca: delete the following lines since it's a repetition?
                 surroundings = [tuple([current_guest_pos['x'], current_guest_pos['y']]),tuple([current_guest_pos['x']+1, current_guest_pos['y']]),
                     tuple([current_guest_pos['x']-1, current_guest_pos['y']]), tuple([current_guest_pos['x'], current_guest_pos['y']+1]),
                     tuple([current_guest_pos['x'], current_guest_pos['y']-1]),tuple([current_guest_pos['x']+2, current_guest_pos['y']]),
@@ -375,8 +298,10 @@ class SimulationNewRecovery(object):
                             idle_obstacles_guests = algorithm.get_idle_obstacles_guests(all_idle_guests.values(), 1)
                             #print('idle obstacle guests', idle_obstacles_guests)
                             guest = {'name': guest['name'], 'start': [x_new, y_new], 'goal': task['start']}
-                            env = Environment(dimensions, [guest], set(obstacles_guests) | idle_obstacles_guests,
-                                            moving_obstacles_guests, a_star_max_iter, self.get_graph_guests())
+                            env = DynamicEnvironment(dimensions, [guest], set(obstacles_guests) | idle_obstacles_guests,
+                                            moving_obstacles_guests, a_star_max_iter, self.get_graph_guests(),
+                                            weight_function=self.weight_function,
+                                            occupancy_model=self.occupancy_model)
                             cbs = CBS(env)
                             path_to_task_start = algorithm.search(cbs)
                             if not path_to_task_start:
@@ -394,8 +319,10 @@ class SimulationNewRecovery(object):
                                 #print('moving_obstacles_guests PER GOAL1',moving_obstacles_guests)
                                 #print(algorithm.get_token()['guests'])
                                 guest = {'name': guest['name'], 'start': task['start'], 'goal':task['goal']}
-                                env = Environment(dimensions, [guest], set(obstacles_guests) | idle_obstacles_guests,
-                                                moving_obstacles_guests, a_star_max_iter, self.get_graph_guests())
+                                env = DynamicEnvironment(dimensions, [guest], set(obstacles_guests) | idle_obstacles_guests,
+                                                moving_obstacles_guests, a_star_max_iter, self.get_graph_guests(),
+                                                weight_function=self.weight_function,
+                                                occupancy_model=self.occupancy_model)
                                 cbs = CBS(env)
                                 path_to_task_goal = algorithm.search(cbs)
                                 if not path_to_task_goal:
@@ -428,8 +355,11 @@ class SimulationNewRecovery(object):
                             #print('moving_obstacles_agents PER START1',moving_obstacles_agents)
                             #print('TOKEN',self.token['agents'])
                             guest = {'name': guest['name'], 'start': [x_new, y_new], 'goal': task['goal']}
-                            env = Environment(algorithm.dimensions, [guest], algorithm.obstacles_guests | idle_obstacles_guests,
-                                moving_obstacles_guests, a_star_max_iter=algorithm.a_star_max_iter, graph=self.get_graph_guests())
+                            env = DynamicEnvironment(algorithm.dimensions, [guest], algorithm.obstacles_guests | idle_obstacles_guests,
+                                moving_obstacles_guests, a_star_max_iter=algorithm.a_star_max_iter,
+                                graph=self.get_graph_guests(),
+                                weight_function=self.weight_function,
+                                occupancy_model=self.occupancy_model)
                             cbs = CBS(env)
                             path_to_task_goal = algorithm.search(cbs)
                             if not path_to_task_goal:
@@ -566,45 +496,62 @@ class SimulationNewRecovery(object):
                     #all_idle_guests.pop(guest['name'])
                     #algorithm.go_to_closest_non_task_endpoint_guest2(guest['name'], [x_new, y_new], all_idle_guests)
 
-        
+        # TODO @bonaluca: clean this up
+        fields_of_view = {}
+        for guest in self.guests:
+            current_guest_pos = self.actual_paths_guests[guest['name']][-1]
+            current_guest_pos = (current_guest_pos['x'], current_guest_pos['y'])
+            adjacent_locations = self.G_guests.neighbors(current_guest_pos)
+            fields_of_view[guest['name']] = set([*adjacent_locations, current_guest_pos])
+            fields_of_view[guest['name']] |= set([self.G_guests.neighbors(n) for n in adjacent_locations])
+        visible_locations = set.union(*fields_of_view.values())
+
+        agent_locations = {agent['name']: (
+            self.actual_paths[agent['name']][-1]['x'],
+            self.actual_paths[agent['name']][-1]['y']
+            ) for agent in self.agents}
+        seen_agents = {agent['name']: agent_locations[agent['name']] \
+            for agent in self.agents \
+                if agent_locations[agent['name']] in visible_locations}
+        free_locations = visible_locations - set(seen_agents.values())
+
+        try:
+            self.occupancy_model.time_forward(free_locations=free_locations, seen_agents=seen_agents)
+            pass
+        except NotFittedError as e:
+            pass
 
 
         #NOW GUESTS
         for guest in guests_to_move:
             current_guest_pos = self.actual_paths_guests[guest['name']][-1]
-            self.guests_pos_now.add(tuple([current_guest_pos['x'], current_guest_pos['y']]))
-            if len(algorithm.get_token()['guests'][guest['name']]) == 1:
-                self.guests_moved.add(guest['name'])
-                self.actual_paths_guests[guest['name']].append({'t': self.time, 'x': current_guest_pos['x'], 'y': current_guest_pos['y']})
-            if len(algorithm.get_token()['guests'][guest['name']]) > 1:
-                x_new = algorithm.get_token()['guests'][guest['name']][1][0]
-                y_new = algorithm.get_token()['guests'][guest['name']][1][1]
-                self.guests_moved.add(guest['name'])
-                self.guests_pos_now.remove(tuple([current_guest_pos['x'], current_guest_pos['y']]))
-                self.guests_pos_now.add(tuple([x_new, y_new]))
-                algorithm.get_token()['guests'][guest['name']] = algorithm.get_token()['guests'][guest['name']][1:]
-                self.actual_paths_guests[guest['name']].append({'t': self.time, 'x': x_new, 'y': y_new})
-                
+            guest_plan = algorithm.get_token()['guests'][guest['name']]
+            if len(guest_plan) <= 1:
+                # Guest is idle
+                (x_new, y_new) = (current_guest_pos['x'], current_guest_pos['y'])
+            else:
+                # Guest has an assigned task
+                (x_new, y_new) = tuple(guest_plan[1])
+                algorithm.get_token()['guests'][guest['name']] = guest_plan[1:]
+            self.actual_paths_guests[guest['name']].append({'t': self.time, 'x': x_new, 'y': y_new})
+            self.guests_moved.add(guest['name'])
+            self.guests_pos_now.add((x_new, y_new))
 
         #AGENTS
         # here we move the agents
         for agent in agents_to_move:
             current_agent_pos = self.actual_paths[agent['name']][-1]
-            self.agents_pos_now.add(tuple([current_agent_pos['x'], current_agent_pos['y']]))
-            #case of idle agents
-            if len(algorithm.get_token()['agents'][agent['name']]) == 1:
-                self.agents_moved.add(agent['name'])
-                self.actual_paths[agent['name']].append({'t': self.time, 'x': current_agent_pos['x'], 'y': current_agent_pos['y']})
-            #case of agents with an assigned task
-            if len(algorithm.get_token()['agents'][agent['name']]) > 1:
-                x_new = algorithm.get_token()['agents'][agent['name']][1][0]
-                y_new = algorithm.get_token()['agents'][agent['name']][1][1]
-                self.agents_moved.add(agent['name'])
-                self.agents_pos_now.remove(tuple([current_agent_pos['x'], current_agent_pos['y']]))
-                self.agents_pos_now.add(tuple([x_new, y_new]))
-                algorithm.get_token()['agents'][agent['name']] = algorithm.get_token()['agents'][agent['name']][1:]
-                self.actual_paths[agent['name']].append({'t': self.time, 'x': x_new, 'y': y_new})
-
+            agent_plan = algorithm.get_token()['agents'][agent['name']]
+            if len(agent_plan) <= 1:
+                # Agent is idle
+                (x_new, y_new) = (current_agent_pos['x'], current_agent_pos['y'])
+            else:
+                # Agent has an assigned task
+                (x_new, y_new) = tuple(agent_plan[1])
+                algorithm.get_token()['agents'][agent['name']] = agent_plan[1:]
+            self.actual_paths[agent['name']].append({'t': self.time, 'x': x_new, 'y': y_new})
+            self.agents_moved.add(agent['name'])
+            self.agents_pos_now.add((x_new, y_new))
 
     def get_time(self):
         return self.time

@@ -4,7 +4,7 @@ author: Giacomo Lodigiani (@Lodz97)
 """
 from math import fabs
 import random
-from Simulation.CBS.cbs import CBS, Environment
+from Simulation.CBS.cbs import CBS, Environment, DynamicEnvironment
 import logging
 from collections import defaultdict
 
@@ -367,8 +367,10 @@ class TokenPassingRecovery(object):
         moving_obstacles_guests = self.get_moving_obstacles_guests(j, 0)
         idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
         guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
-        env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
-                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+        env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
+                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests(),
+                          weight_function=self.simulation.weight_function,
+                          occupancy_model=self.simulation.occupancy_model)
         cbs = CBS(env)
         path_to_non_task_endpoint = self.search(cbs)
         if not path_to_non_task_endpoint:
@@ -392,8 +394,10 @@ class TokenPassingRecovery(object):
         moving_obstacles_guests = self.get_moving_obstacles_guests(j, 0)
         idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
         guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
-        env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
-                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+        env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
+                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests(),
+                          weight_function=self.simulation.weight_function,
+                          occupancy_model=self.simulation.occupancy_model)
         cbs = CBS(env)
         path_to_non_task_endpoint = self.search(cbs)
         if not path_to_non_task_endpoint:
@@ -418,8 +422,10 @@ class TokenPassingRecovery(object):
         moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'].copy(), 0)
         idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
         guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
-        env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
-                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+        env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
+                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests(),
+                          weight_function=self.simulation.weight_function,
+                          occupancy_model=self.simulation.occupancy_model)
         cbs = CBS(env)
         path_to_non_task_endpoint = self.search(cbs)
         if not path_to_non_task_endpoint:
@@ -716,8 +722,11 @@ class TokenPassingRecovery(object):
                 moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'], 0)
                 idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
                 guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_task[0]}
-                env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
-                                moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+                env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
+                                moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter,
+                                graph=self.simulation.get_graph_guests(),
+                                weight_function=self.simulation.weight_function,
+                                occupancy_model=self.simulation.occupancy_model)
                 cbs = CBS(env)
                 path_to_task_start = self.search(cbs)
                 #print('path_to_task_start',path_to_task_start)
@@ -733,8 +742,11 @@ class TokenPassingRecovery(object):
                     idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 
                                                                         cost1 - 1)
                     guest = {'name': guest_name, 'start': closest_task[0], 'goal': closest_task[1]}
-                    env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
-                                    moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+                    env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
+                                    moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter,
+                                    graph=self.simulation.get_graph_guests(),
+                                    weight_function=self.simulation.weight_function,
+                                    occupancy_model=self.simulation.occupancy_model)
                     cbs = CBS(env)
                     path_to_task_goal = self.search(cbs)
                     #print('path_to_task_goal',path_to_task_goal)

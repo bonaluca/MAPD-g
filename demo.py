@@ -5,8 +5,9 @@ import json
 import os
 import logging
 from Simulation.TP_with_recovery import TokenPassingRecovery
-import RoothPath
 from Simulation.simulation_new_recovery import SimulationNewRecovery
+from Simulation.occupancy_model import OccupancyModel, OracleModel, MarkovianOccupancyModel
+import RoothPath
 import subprocess
 import sys
 from collections import defaultdict
@@ -28,6 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('-alpha', help='Parameter for balance between distance and occupancy', default=None, type=float)
     parser.add_argument('-map_name', help='Name of map chosen', default=None, type=str)
     parser.add_argument('-obs_time', help='Observation time of guests agents', default=300, type=int)
+    parser.add_argument('-order', help='Order of the model', default=0, type=int, choices=[0, 1, 2, 3])
     parser.add_argument('-d', help='Output directory', default='output')
     parser.add_argument('-log', help='Log level of the application', default='WARN', type=str)
 
@@ -76,8 +78,18 @@ if __name__ == '__main__':
     with open(args.param + config['visual_postfix'], 'w') as param_file:
         yaml.safe_dump(param, param_file)
 
+    # Occupancy model
+    #occupancy_model = OracleModel(*dimensions, agents, lambda: globals()['tp'].get_token())
+    if args.order == 0:
+        occupancy_model = OccupancyModel(*dimensions, agents)
+    else:
+        occupancy_model = MarkovianOccupancyModel(
+            *dimensions, agents, obstacles=obstacles_agents,
+            order=args.order, cache_size="1G"
+        )
+
     # Simulate
-    simulation = SimulationNewRecovery(tasks, tasks_guest, agents, guests, alpha=args.alpha)
+    simulation = SimulationNewRecovery(tasks, tasks_guest, agents, guests, occupancy_model, alpha=args.alpha)
     a_star_max_iter = 4000
     observation_time=args.obs_time
     tp = TokenPassingRecovery(agents, guests, dimensions, obstacles_agents, obstacles_guests, non_task_endpoints, non_task_endpoints_guests, simulation,
@@ -85,8 +97,15 @@ if __name__ == '__main__':
                               new_recovery=True)
     
     
-    while (tp.get_completed_tasks() != len(tasks) or tp.get_completed_tasks_guest() != len(tasks_guest)) and simulation.time<2000:
+    while (tp.get_completed_tasks() != len(tasks) or tp.get_completed_tasks_guest() != len(tasks_guest)):
+        # TODO @bonaluca: never true if observation_time = 0
+        if simulation.time == observation_time - 1:
+            occupancy_model.fit(simulation.actual_paths)
         simulation.time_forward(tp, dimensions, non_task_endpoints_guests, obstacles, obstacles_agents, obstacles_guests, a_star_max_iter,observation_time)
+
+        if simulation.time == 3000:
+            logging.warning('Simulation timeout elapsed')
+            break
 
     # Computation of the whole cost
     cost = 0
@@ -150,7 +169,7 @@ if __name__ == '__main__':
               'assigned_tasks_times_guest': tp.get_assigned_tasks_times_guest(),
               'completed_tasks_times_guest': tp.get_completed_tasks_times_guest(),
               'conflicts': conflicts,
-              'prob_mat': simulation.prob_mat,
+              'prob_mat': occupancy_model.get_prob_matrix_90deg(),
               'n_conflicts': n_conflicts,
               'n_timespan': timespan,
               'execution_time_tasks': execution_time_tasks,
