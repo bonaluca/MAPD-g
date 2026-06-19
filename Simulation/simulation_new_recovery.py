@@ -44,7 +44,7 @@ class SimulationNewRecovery(object):
         self.guest_presence = False
         self.initialize_simulation(weight_function=weight_function)
 
-        if weight_function == 'convex' and self.guest_algorithm == 'astar':
+        if weight_function == 'convex' and self.guest_algorithm == 'astar' and self.alpha != 0:
             raise ValueError('Can\'t use A*: L1 norm is not an admissible heuristic')
 
     def initialize_simulation(self, weight_function='convex'):

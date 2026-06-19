@@ -12,12 +12,13 @@ from Simulation.exceptions import PathNotFoundError
 class TokenPassingRecovery(object):
     random.seed(1234)
     def __init__(self, agents, guests, dimesions, obstacles_agents, obstacles_guests, 
-                non_task_endpoints, non_task_endpoints_guests, simulation, guest_replan_wnd=None,
+                non_task_endpoints, non_task_endpoints_guests, simulation, guest_replan_wnd=None, supermodel=False,
                 a_star_max_iter=4000, k=0,pd=None, p_max=1, p_iter=1, new_recovery=False, strict_idle=False):
         self.agents = agents
         self.guests = guests
         self.dimensions = dimesions
         self.guest_replan_wnd = guest_replan_wnd
+        self.supermodel = supermodel
         self.obstacles_agents = set(obstacles_agents)
         self.obstacles_guests = set(obstacles_guests)
         self.non_task_endpoints = non_task_endpoints
@@ -588,8 +589,17 @@ class TokenPassingRecovery(object):
                 lambda item: item[0][2] >= 0, moving_obstacles_agents.items()
             ))
 
-            # Joining the moving obstacles of the agents
+            # Joining the moving obstacles of nearby agents
             moving_obstacles.update(moving_obstacles_agents.items())
+
+        if self.supermodel:
+            all_agents_tokens = self.token['agents'].copy()
+            moving_obstacles_agents = self.get_moving_obstacles(all_agents_tokens, time_start)
+            idle_obstacles_agents = self.get_idle_obstacles(all_agents_tokens.values(), time_start)
+
+            # Joining idle and moving ostacles of all agents
+            moving_obstacles.update(moving_obstacles_agents.items())
+            idle_obstacles_guests |= idle_obstacles_agents
 
         guests = [{'name': guest, 'start': start, 'goal': goal}]
         env = DynamicEnvironment(
