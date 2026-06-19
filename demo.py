@@ -181,5 +181,5 @@ if __name__ == '__main__':
     with open(args.output, 'w') as output_yaml:
         yaml.safe_dump(output, output_yaml)
 
-    create = [sys.executable, '-m', 'Utils.Visualization.visualize', '-slow_factor', str(args.slow_factor), '-alpha',str(args.alpha),'-map_name',str(args.map_name)]
-    subprocess.call(create)
+    #create = [sys.executable, '-m', 'Utils.Visualization.visualize', '-slow_factor', str(args.slow_factor), '-alpha',str(args.alpha),'-map_name',str(args.map_name)]
+    #subprocess.call(create)
