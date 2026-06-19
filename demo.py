@@ -103,6 +103,9 @@ if __name__ == '__main__':
     else:
         obstacles_agents += delivery_guests
     obstacles_guests = obstacles + non_task_endpoints + delivery_agents
+    forbidden_moves_agents = list(map(lambda x: (tuple(x[0]), tuple(x[1])),
+        param['map'].get('forbidden_moves_agents', [])
+    ))
     agents = param['agents']
     guests = param['guests']
     tasks = param['tasks']
@@ -130,6 +133,7 @@ if __name__ == '__main__':
     simulation = SimulationNewRecovery(
         tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests,
         dimensions, occupancy_model, alpha=args.alpha, full_sight=args.full_sight,
+        forbidden_moves_agents=forbidden_moves_agents,
         weight_function=args.weight_function
     )
     a_star_max_iter = 4000

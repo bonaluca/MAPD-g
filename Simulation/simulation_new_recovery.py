@@ -8,7 +8,7 @@ from Simulation.exceptions import NotFittedError, PathNotFoundError
 
 class SimulationNewRecovery(object):
     random.seed(1234)
-    def __init__(self, tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha, full_sight=False, weight_function='convex'):
+    def __init__(self, tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha, full_sight=False, weight_function='convex', forbidden_moves_agents=[]):
         self.tasks = tasks #tasks of the agents
         self.tasks_guest = tasks_guest #tasks of the guests
         self.agents = agents #the agents
@@ -16,6 +16,7 @@ class SimulationNewRecovery(object):
         self.obstacles_agents = obstacles_agents #the obstacles for the agents
         self.obstacles_guests = obstacles_guests #the obstacles for the guests
         self.dimensions = dimensions #the dimensions of the grid
+        self.forbidden_moves_agents = forbidden_moves_agents #forbidden moves for agents
         self.occupancy_model = occupancy_model #the occupancy model of the agents
         self.alpha = alpha
         self.full_sight = full_sight #guests know where agents are after each time step
@@ -53,15 +54,24 @@ class SimulationNewRecovery(object):
         for i in range(0,self.dimensions[0]):
             for j in range(0,self.dimensions[1]):
                 if (i,j) not in self.obstacles_agents:
-                    if (i+1,j) not in self.obstacles_agents and i+1 < self.dimensions[0]:
+                    if (i+1,j) not in self.obstacles_agents and \
+                        i+1 < self.dimensions[0] and \
+                        ((i,j), (i+1,j)) not in self.forbidden_moves_agents:
                         elist_agents.append(((i,j),(i+1,j),1))
-                    if (i-1,j) not in self.obstacles_agents and i-1 > -1:
+                    if (i-1,j) not in self.obstacles_agents and \
+                        i-1 > -1 and \
+                        ((i,j), (i-1,j)) not in self.forbidden_moves_agents:
                         elist_agents.append(((i,j),(i-1,j),1))
-                    if (i,j-1) not in self.obstacles_agents and j-1 > -1:
+                    if (i,j-1) not in self.obstacles_agents and \
+                        j-1 > -1 and \
+                        ((i,j), (i,j-1)) not in self.forbidden_moves_agents:
                         elist_agents.append(((i,j),(i,j-1),1))
-                    if (i,j+1) not in self.obstacles_agents and j+1 < self.dimensions[1]:
+                    if (i,j+1) not in self.obstacles_agents and \
+                        j+1 < self.dimensions[1] and \
+                        ((i,j), (i,j+1)) not in self.forbidden_moves_agents:
                         elist_agents.append(((i,j),(i,j+1),1))
-                    if (i,j) not in self.obstacles_agents:
+                    if (i,j) not in self.obstacles_agents and \
+                        ((i,j), (i,j)) not in self.forbidden_moves_agents:
                         elist_agents.append(((i,j),(i,j),1))
         self.G_agents = nx.MultiDiGraph()
         self.G_agents.add_weighted_edges_from(elist_agents)
