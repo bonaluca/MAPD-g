@@ -24,10 +24,12 @@ class SimulationNewRecovery(object):
         self.guests_moved = set() #it is a set that contains the guests that have been moved
         self.actual_paths = {} #it is a dictionary that keeps track step by step of the actual paths of each agent
         self.actual_paths_guests = {} #it is a dictionary that keeps track step by step of the actual paths of each guest
+        self.agent_sightings = {} #it is a dictionary that keeps track of the agents that the guests encountered
         self.algo_time = 0 #it keeps track of the time (in seconds) that the tp algorithm employs for each iteration
         self.n_replanning_guest = 0 #it counts the number of times a guest has to change its path in order to avoid an agent
         self.to_replan_from_start = []
         self.to_replan_from_goal = []
+        self.guest_presence = False
         self.initialize_simulation()
 
     def initialize_simulation(self):
@@ -144,7 +146,6 @@ class SimulationNewRecovery(object):
 
         #NOW GUESTS
         for guest in moving_guests:
-            self.guest_presence = False
             current_guest_pos = self.actual_paths_guests[guest][-1] #current_guest_pos tells us the current position of the guest
             #self.guests_pos_now.add(tuple([current_guest_pos['x'], current_guest_pos['y']])) #guest current position update
 
@@ -257,13 +258,13 @@ class SimulationNewRecovery(object):
                     logging.error('Deadlock due to %s' % guest)
                     self.deadlock = True
                     self.deadlock_guest = guest
+                    self.guest_presence = True
                     self.deadlock_task = algorithm.get_token()['guests_to_tasks'][guest] \
                         if guest in algorithm.get_token()['guests_to_tasks'] else None
                     return
 
 
         for guest in idle_guests:
-            self.guest_presence = False
             current_guest_pos = self.actual_paths_guests[guest][-1]
 
             x_new, y_new = algorithm.get_token()['guests'][guest][0]
@@ -373,6 +374,13 @@ class SimulationNewRecovery(object):
             )
         }
         free_locations = visible_locations - set(seen_agents.values())
+
+        # Record agent sighting
+        for agent, pos in seen_agents.items():
+            sightings = self.agent_sightings.setdefault(agent, [])
+            sightings.append({
+                't': self.time + 1, 'x': pos[0], 'y': pos[1]
+            })
 
         try:
             self.occupancy_model.time_forward(free_locations=free_locations, seen_agents=seen_agents)
@@ -650,6 +658,26 @@ class SimulationNewRecovery(object):
 
     def get_graph_guests(self):
         return self.G_guests
+
+    def get_agent_sightings(self, from_time=None, to_time=None):
+        if from_time is None and to_time is None:
+            return self.agent_sightings
+
+        if to_time is None:
+            return {
+                agent: list(filter(
+                    lambda step: step['t'] >= from_time, self.agent_sightings[agent]
+                ))
+                for agent in self.agent_sightings
+            }
+
+        return {
+            agent: list(filter(
+                lambda item: from_time <= item['t'] <= to_time,
+                self.agent_sightings[agent]
+            ))
+            for agent in self.agent_sightings
+        }
 
     def admissible_heuristic(self, move, goal_pos):
         return fabs(move[0] - goal_pos[0]) + fabs(move[1] - goal_pos[1])
