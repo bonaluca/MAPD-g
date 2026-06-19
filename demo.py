@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('-weight_function', help='Weight function to combine distance and occupancy',
                         choices=['convex', 'exp'], default='convex')
     parser.add_argument('-order', help='Order of the model', default=0, type=int, choices=[0, 1, 2, 3])
+    parser.add_argument('-prune_thres', help='Minimum threshold for the occupancy probability', type=float, default=None)
     parser.add_argument('-smoothing', help='Apply smoothing to the transition matrix', action='store_true')
     parser.add_argument('-init_policy', help='The initialization policy for the transition matrix',
                         choices=['random', 'selfloop', 'heading'], default='random')
@@ -117,7 +118,7 @@ if __name__ == '__main__':
         occupancy_model = OccupancyModel(*dimensions, agents)
     else:
         occupancy_model = MarkovianOccupancyModel(
-            *dimensions, agents, obstacles=obstacles_agents,
+            *dimensions, agents, obstacles=obstacles_agents, prune_thres=args.prune_thres,
             order=args.order, cache_size=args.cache_size, backoff=args.smoothing
         )
 

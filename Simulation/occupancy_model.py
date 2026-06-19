@@ -69,14 +69,15 @@ class Cache:
 
 class MarkovChain(object):
 
-    def __init__(self, width, height, obstacles=None, order=1, cache_size=None):
+    def __init__(self, width, height, obstacles=None, order=1, prune_thres=None, cache_size=None):
         self.width = width
         self.height = height
         self.n_states = self.width * self.height
         self.order = order
+        self.obstacles = obstacles or []
+        self.prune_thres = prune_thres
         self._not_fitted = True
         self._backoff_in_use = False
-        self.obstacles = obstacles or []
 
         location_valid = lambda l: l not in self.obstacles \
             and (0 <= l[0] < self.width) \
@@ -191,6 +192,7 @@ class MarkovChain(object):
         while t > 0:
             k, k_step_matrix = self.compute_t_step_matrix(t)
             k_step_belief = k_step_matrix.dot(k_step_belief)
+            k_step_belief = self._prune_vector(k_step_belief)
             t -= k
         return k_step_belief
 
@@ -287,22 +289,29 @@ class MarkovChain(object):
         # Populating cache
         while last_t_cached < t and not self.cache.is_full():
             if last_t_cached == -1:
-                step_t_mat = sparse.eye(self.n_valid_states,
+                t_step_matrix = sparse.eye(self.n_valid_states,
                     dtype=np.float64, format="csr")
             else:
                 step_t_minus_one = self.cache.retrieve(last_t_cached)
-                step_t_mat = self.transition_matrix.dot(step_t_minus_one)
-            self.cache.store(step_t_mat)
+                t_step_matrix = self.transition_matrix.dot(step_t_minus_one)
+            t_step_matrix = self._prune_matrix(t_step_matrix)
+            self.cache.store(t_step_matrix)
             last_t_cached = self.cache.last_t_stored()
+        # L1 cache hit
         if self._last_computation and self._last_computation['time'] == t:
             return t, self._last_computation['matrix']
-        if last_t_cached < 1: # Not using cache
-            if only_cached:
-                t = min(t, 1)
-            return t, self.transition_matrix ** t
-        if t <= last_t_cached: # Cache hit
+        # L2 cache hit
+        if t <= last_t_cached:
             t_step_matrix = self.cache.retrieve(t)
             return t, t_step_matrix
+        # Not using L2 cache
+        if last_t_cached < 1:
+            if only_cached:
+                t = min(t, 1)
+            t_step_matrix = self.transition_matrix ** t
+            t_step_matrix = self._prune_matrix(t_step_matrix)
+            return t, t_step_matrix
+        # Cache capacity is exceeded
         if not only_cached:
             last_cached_matrix = self.cache.retrieve(last_t_cached)
             if self._last_computation and t > self._last_computation['time'] > last_t_cached:
@@ -310,6 +319,7 @@ class MarkovChain(object):
                 last_cached_matrix = self._last_computation['matrix']
             t_step_matrix = self.transition_matrix ** (t - last_t_cached)
             t_step_matrix = t_step_matrix.dot(last_cached_matrix)
+            t_step_matrix = self._prune_matrix(t_step_matrix)
             # Updating last computation
             self._last_computation = {
                 'time': t,
@@ -393,6 +403,30 @@ class MarkovChain(object):
         sum_cols = np.ravel(matrix.sum(axis=0))
         inv_sum_diag = sparse.diags(sum_cols ** -1, dtype=np.float64)
         return matrix.dot(inv_sum_diag)
+
+    def _prune_matrix(self, matrix):
+        """Nullify entries of a sparse matrix if lower than a threshold."""
+
+        if self.prune_thres is not None:
+            matrix.data = np.array(list(map(
+                lambda x: 0 if x <= self.prune_thres else x,
+                matrix.data
+            )))
+            sparse.csr_matrix.eliminate_zeros(matrix)
+        return self._make_stochastic(matrix)
+
+    def _prune_vector(self, vector):
+        """Nullify entries of a numpy array if lower than a threshold."""
+
+        if self.prune_thres is None:
+            return vector
+
+        pruned = np.where(vector <= self.prune_thres, 0, vector)
+        if pruned.sum() == 0:
+            pruned = np.zeros_like(vector)
+            pruned[np.argmax(vector)] = 1.
+
+        return pruned / pruned.sum()
 
     @staticmethod
     def good_turing(freq_of_freqs):
@@ -506,12 +540,12 @@ class MarkovChain(object):
             kgram_counts = km1_block_diag.dot(kgram_counts)
 
         # Strongly discourage giving probability to idle moves
-        non_idle_diag = list(map(
-            lambda state: 1 if len(state) == 1 or state[-1] != state[-2] else 0,
-            self.valid_states
-        ))
-        non_idle = sparse.diags(non_idle_diag, dtype=np.float64)
-        backoff_prob = non_idle.dot(backoff_prob)
+#        non_idle_diag = list(map(
+#            lambda state: 1 if len(state) == 1 or state[-1] != state[-2] else 0,
+#            self.valid_states
+#        ))
+#        non_idle = sparse.diags(non_idle_diag, dtype=np.float64)
+#        backoff_prob = non_idle.dot(backoff_prob)
 
         # Normalize backoff probability
         sum_prob = n_block_diag.dot(backoff_prob)
@@ -705,7 +739,8 @@ class OracleModel(OccupancyModel):
 class MarkovianOccupancyModel(OccupancyModel):
     """Markovian occupancy model."""
 
-    def __init__(self, width, height, agents, obstacles=None, order=1, cache_size=None, shared=True, backoff=False):
+    def __init__(self, width, height, agents, obstacles=None, order=1,
+        cache_size=None, prune_thres=None, shared=True, backoff=False):
         super().__init__(width, height, agents)
 
         self.order = order
@@ -733,14 +768,20 @@ class MarkovianOccupancyModel(OccupancyModel):
 
         if shared:
             # Agents share the same markov chain
-            mc = MarkovChain(self.width, self.height, obstacles=obstacles, cache_size=self.mc_cache_size, order=self.order)
+            mc = MarkovChain(
+                self.width, self.height, obstacles=obstacles,
+                cache_size=self.mc_cache_size, prune_thres=prune_thres, order=self.order
+            )
             self.agent_models = {
                 name: mc for name in self.agent_names
             }
         else:
             self.agent_models = {
                     name:
-                    MarkovChain(self.width, self.height, obstacles=obstacles, cache_size=self.mc_cache_size, order=self.order)
+                    MarkovChain(
+                        self.width, self.height, obstacles=obstacles,
+                        cache_size=self.mc_cache_size, prune_thres=prune_thres, order=self.order
+                    )
                 for name in self.agent_names
             }
 
