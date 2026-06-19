@@ -487,32 +487,6 @@ class SimulationNewRecovery(object):
                 #all_idle_guests.pop(guest['name'])
                 #algorithm.go_to_closest_non_task_endpoint_guest2(guest['name'], [x_new, y_new], all_idle_guests)
 
-        # TODO @bonaluca: clean this up and move it to the very end
-        fields_of_view = {}
-        for guest in self.guests:
-            current_guest_pos = self.actual_paths_guests[guest['name']][-1]
-            current_guest_pos = (current_guest_pos['x'], current_guest_pos['y'])
-            adjacent_locations = self.G_guests.neighbors(current_guest_pos)
-            fields_of_view[guest['name']] = set([*adjacent_locations, current_guest_pos])
-            fields_of_view[guest['name']] |= set([self.G_guests.neighbors(n) for n in adjacent_locations])
-        visible_locations = set.union(*fields_of_view.values())
-
-        agent_locations = {agent['name']: (
-            self.actual_paths[agent['name']][-1]['x'],
-            self.actual_paths[agent['name']][-1]['y']
-            ) for agent in self.agents}
-        seen_agents = {agent['name']: agent_locations[agent['name']] \
-            for agent in self.agents \
-                if agent_locations[agent['name']] in visible_locations}
-        free_locations = visible_locations - set(seen_agents.values())
-
-        try:
-            self.occupancy_model.time_forward(free_locations=free_locations, seen_agents=seen_agents)
-            pass
-        except NotFittedError as e:
-            pass
-
-
         #NOW GUESTS
         for guest in guests:
             current_guest_pos = self.actual_paths_guests[guest['name']][-1]
@@ -543,6 +517,27 @@ class SimulationNewRecovery(object):
             self.actual_paths[agent['name']].append({'t': self.time, 'x': x_new, 'y': y_new})
             self.agents_moved.add(agent['name'])
             self.agents_pos_now.add((x_new, y_new))
+
+        # Occupancy model time forward
+        visible_locations = set.union(
+            *(algorithm.surroundings(guest['name']) for guest in guests)
+        )
+
+        seen_agents = {
+            agent_name: algorithm.current_pos_agents(agent_name)
+            for agent_name in set.union(
+                *(algorithm.agents_nearby(guest['name']) for guest in guests)
+            )
+        }
+        free_locations = visible_locations - set(seen_agents.values())
+
+        try:
+            self.occupancy_model.time_forward(free_locations=free_locations, seen_agents=seen_agents)
+        except NotFittedError as e:
+            pass
+
+        return
+
 
     def get_time(self):
         return self.time
