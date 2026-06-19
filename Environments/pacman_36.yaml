@@ -1,0 +1,1573 @@
+agents:
+- name: agent1
+  start:
+  - 7
+  - 11
+- name: agent2
+  start:
+  - 8
+  - 11
+- name: agent3
+  start:
+  - 12
+  - 11
+- name: agent4
+  start:
+  - 13
+  - 11
+guests:
+- name: guest1
+  start:
+  - 3
+  - 13
+- name: guest2
+  start:
+  - 17
+  - 13
+- name: guest3
+  start:
+  - 20
+  - 13
+map:
+  delivery_agents:
+  - - 10
+    - 11
+  - - 8
+    - 10
+  - - 10
+    - 10
+  - - 12
+    - 10
+  delivery_guests:
+  - - 0
+    - 13
+  - - 0
+    - 11
+  - - 3
+    - 11
+  - - 17
+    - 11
+  - - 20
+    - 11
+  dimensions:
+  - 21
+  - 19
+  non_task_endpoints:
+  - - 7
+    - 11
+  - - 8
+    - 11
+  - - 12
+    - 11
+  - - 13
+    - 11
+  non_task_endpoints_guests:
+  - - 3
+    - 13
+  - - 17
+    - 13
+  - - 20
+    - 13
+  obstacles:
+  - - 10
+    - 18
+  - - 1
+    - 17
+  - - 2
+    - 17
+  - - 3
+    - 17
+  - - 5
+    - 17
+  - - 6
+    - 17
+  - - 7
+    - 17
+  - - 8
+    - 17
+  - - 10
+    - 17
+  - - 12
+    - 17
+  - - 13
+    - 17
+  - - 14
+    - 17
+  - - 15
+    - 17
+  - - 17
+    - 17
+  - - 18
+    - 17
+  - - 19
+    - 17
+  - - 1
+    - 15
+  - - 2
+    - 15
+  - - 3
+    - 15
+  - - 5
+    - 15
+  - - 7
+    - 15
+  - - 8
+    - 15
+  - - 9
+    - 15
+  - - 10
+    - 15
+  - - 11
+    - 15
+  - - 12
+    - 15
+  - - 13
+    - 15
+  - - 15
+    - 15
+  - - 17
+    - 15
+  - - 18
+    - 15
+  - - 19
+    - 15
+  - - 5
+    - 14
+  - - 10
+    - 14
+  - - 15
+    - 14
+  - - 1
+    - 13
+  - - 2
+    - 13
+  - - 5
+    - 13
+  - - 6
+    - 13
+  - - 7
+    - 13
+  - - 8
+    - 13
+  - - 10
+    - 13
+  - - 12
+    - 13
+  - - 13
+    - 13
+  - - 14
+    - 13
+  - - 15
+    - 13
+  - - 18
+    - 13
+  - - 19
+    - 13
+  - - 0
+    - 12
+  - - 1
+    - 12
+  - - 2
+    - 12
+  - - 3
+    - 12
+  - - 5
+    - 12
+  - - 15
+    - 12
+  - - 17
+    - 12
+  - - 18
+    - 12
+  - - 19
+    - 12
+  - - 20
+    - 12
+  - - 1
+    - 11
+  - - 2
+    - 11
+  - - 5
+    - 11
+  - - 15
+    - 11
+  - - 18
+    - 11
+  - - 19
+    - 11
+  - - 7
+    - 10
+  - - 13
+    - 10
+  - - 0
+    - 9
+  - - 1
+    - 9
+  - - 2
+    - 9
+  - - 3
+    - 9
+  - - 5
+    - 9
+  - - 7
+    - 9
+  - - 8
+    - 9
+  - - 9
+    - 9
+  - - 10
+    - 9
+  - - 11
+    - 9
+  - - 12
+    - 9
+  - - 13
+    - 9
+  - - 15
+    - 9
+  - - 17
+    - 9
+  - - 18
+    - 9
+  - - 19
+    - 9
+  - - 20
+    - 9
+  - - 0
+    - 8
+  - - 1
+    - 8
+  - - 2
+    - 8
+  - - 3
+    - 8
+  - - 5
+    - 8
+  - - 15
+    - 8
+  - - 17
+    - 8
+  - - 18
+    - 8
+  - - 19
+    - 8
+  - - 20
+    - 8
+  - - 0
+    - 7
+  - - 1
+    - 7
+  - - 2
+    - 7
+  - - 3
+    - 7
+  - - 5
+    - 7
+  - - 7
+    - 7
+  - - 8
+    - 7
+  - - 9
+    - 7
+  - - 10
+    - 7
+  - - 11
+    - 7
+  - - 12
+    - 7
+  - - 13
+    - 7
+  - - 15
+    - 7
+  - - 17
+    - 7
+  - - 18
+    - 7
+  - - 19
+    - 7
+  - - 20
+    - 7
+  - - 10
+    - 6
+  - - 1
+    - 5
+  - - 2
+    - 5
+  - - 3
+    - 5
+  - - 5
+    - 5
+  - - 6
+    - 5
+  - - 7
+    - 5
+  - - 8
+    - 5
+  - - 10
+    - 5
+  - - 12
+    - 5
+  - - 13
+    - 5
+  - - 14
+    - 5
+  - - 15
+    - 5
+  - - 17
+    - 5
+  - - 18
+    - 5
+  - - 19
+    - 5
+  - - 3
+    - 4
+  - - 17
+    - 4
+  - - 0
+    - 3
+  - - 1
+    - 3
+  - - 3
+    - 3
+  - - 5
+    - 3
+  - - 7
+    - 3
+  - - 8
+    - 3
+  - - 9
+    - 3
+  - - 10
+    - 3
+  - - 11
+    - 3
+  - - 12
+    - 3
+  - - 13
+    - 3
+  - - 15
+    - 3
+  - - 17
+    - 3
+  - - 19
+    - 3
+  - - 20
+    - 3
+  - - 5
+    - 2
+  - - 10
+    - 2
+  - - 15
+    - 2
+  - - 1
+    - 1
+  - - 2
+    - 1
+  - - 3
+    - 1
+  - - 4
+    - 1
+  - - 5
+    - 1
+  - - 6
+    - 1
+  - - 7
+    - 1
+  - - 8
+    - 1
+  - - 10
+    - 1
+  - - 12
+    - 1
+  - - 13
+    - 1
+  - - 14
+    - 1
+  - - 15
+    - 1
+  - - 16
+    - 1
+  - - 17
+    - 1
+  - - 18
+    - 1
+  - - 19
+    - 1
+tasks:
+- goal:
+  - 12
+  - 10
+  start:
+  - 2
+  - 18
+  start_time: 1
+  task_name: task0
+- goal:
+  - 10
+  - 11
+  start:
+  - 12
+  - 12
+  start_time: 7
+  task_name: task1
+- goal:
+  - 8
+  - 10
+  start:
+  - 7
+  - 14
+  start_time: 9
+  task_name: task2
+- goal:
+  - 10
+  - 10
+  start:
+  - 8
+  - 16
+  start_time: 22
+  task_name: task3
+- goal:
+  - 12
+  - 10
+  start:
+  - 8
+  - 4
+  start_time: 29
+  task_name: task4
+- goal:
+  - 10
+  - 11
+  start:
+  - 3
+  - 16
+  start_time: 41
+  task_name: task5
+- goal:
+  - 10
+  - 11
+  start:
+  - 18
+  - 18
+  start_time: 49
+  task_name: task6
+- goal:
+  - 12
+  - 10
+  start:
+  - 18
+  - 4
+  start_time: 50
+  task_name: task7
+- goal:
+  - 8
+  - 10
+  start:
+  - 6
+  - 18
+  start_time: 52
+  task_name: task8
+- goal:
+  - 10
+  - 10
+  start:
+  - 18
+  - 0
+  start_time: 53
+  task_name: task9
+- goal:
+  - 12
+  - 10
+  start:
+  - 6
+  - 6
+  start_time: 54
+  task_name: task10
+- goal:
+  - 10
+  - 10
+  start:
+  - 6
+  - 12
+  start_time: 56
+  task_name: task11
+- goal:
+  - 12
+  - 10
+  start:
+  - 7
+  - 6
+  start_time: 62
+  task_name: task12
+- goal:
+  - 8
+  - 10
+  start:
+  - 14
+  - 18
+  start_time: 67
+  task_name: task13
+- goal:
+  - 10
+  - 11
+  start:
+  - 7
+  - 16
+  start_time: 68
+  task_name: task14
+- goal:
+  - 10
+  - 10
+  start:
+  - 12
+  - 14
+  start_time: 70
+  task_name: task15
+- goal:
+  - 8
+  - 10
+  start:
+  - 0
+  - 4
+  start_time: 74
+  task_name: task16
+- goal:
+  - 10
+  - 11
+  start:
+  - 12
+  - 18
+  start_time: 74
+  task_name: task17
+- goal:
+  - 8
+  - 10
+  start:
+  - 1
+  - 6
+  start_time: 79
+  task_name: task18
+- goal:
+  - 12
+  - 10
+  start:
+  - 1
+  - 10
+  start_time: 86
+  task_name: task19
+- goal:
+  - 12
+  - 10
+  start:
+  - 1
+  - 0
+  start_time: 90
+  task_name: task20
+- goal:
+  - 10
+  - 10
+  start:
+  - 6
+  - 18
+  start_time: 93
+  task_name: task21
+- goal:
+  - 12
+  - 10
+  start:
+  - 15
+  - 0
+  start_time: 95
+  task_name: task22
+- goal:
+  - 10
+  - 11
+  start:
+  - 9
+  - 14
+  start_time: 104
+  task_name: task23
+- goal:
+  - 12
+  - 10
+  start:
+  - 7
+  - 12
+  start_time: 108
+  task_name: task24
+- goal:
+  - 12
+  - 10
+  start:
+  - 9
+  - 2
+  start_time: 110
+  task_name: task25
+- goal:
+  - 10
+  - 10
+  start:
+  - 6
+  - 12
+  start_time: 113
+  task_name: task26
+- goal:
+  - 10
+  - 11
+  start:
+  - 18
+  - 18
+  start_time: 124
+  task_name: task27
+- goal:
+  - 10
+  - 11
+  start:
+  - 5
+  - 16
+  start_time: 131
+  task_name: task28
+- goal:
+  - 8
+  - 10
+  start:
+  - 20
+  - 4
+  start_time: 137
+  task_name: task29
+- goal:
+  - 10
+  - 10
+  start:
+  - 5
+  - 0
+  start_time: 140
+  task_name: task30
+- goal:
+  - 12
+  - 10
+  start:
+  - 17
+  - 14
+  start_time: 145
+  task_name: task31
+- goal:
+  - 12
+  - 10
+  start:
+  - 16
+  - 2
+  start_time: 146
+  task_name: task32
+- goal:
+  - 8
+  - 10
+  start:
+  - 3
+  - 10
+  start_time: 152
+  task_name: task33
+- goal:
+  - 8
+  - 10
+  start:
+  - 12
+  - 14
+  start_time: 153
+  task_name: task34
+- goal:
+  - 10
+  - 10
+  start:
+  - 12
+  - 2
+  start_time: 161
+  task_name: task35
+- goal:
+  - 8
+  - 10
+  start:
+  - 8
+  - 0
+  start_time: 165
+  task_name: task36
+- goal:
+  - 10
+  - 11
+  start:
+  - 6
+  - 16
+  start_time: 179
+  task_name: task37
+- goal:
+  - 12
+  - 10
+  start:
+  - 4
+  - 0
+  start_time: 180
+  task_name: task38
+- goal:
+  - 12
+  - 10
+  start:
+  - 3
+  - 14
+  start_time: 186
+  task_name: task39
+- goal:
+  - 10
+  - 10
+  start:
+  - 6
+  - 18
+  start_time: 199
+  task_name: task40
+- goal:
+  - 10
+  - 10
+  start:
+  - 1
+  - 14
+  start_time: 204
+  task_name: task41
+- goal:
+  - 10
+  - 11
+  start:
+  - 6
+  - 4
+  start_time: 206
+  task_name: task42
+- goal:
+  - 10
+  - 11
+  start:
+  - 3
+  - 18
+  start_time: 210
+  task_name: task43
+- goal:
+  - 10
+  - 11
+  start:
+  - 2
+  - 16
+  start_time: 216
+  task_name: task44
+- goal:
+  - 10
+  - 11
+  start:
+  - 18
+  - 10
+  start_time: 217
+  task_name: task45
+- goal:
+  - 10
+  - 10
+  start:
+  - 13
+  - 6
+  start_time: 219
+  task_name: task46
+- goal:
+  - 10
+  - 10
+  start:
+  - 1
+  - 10
+  start_time: 221
+  task_name: task47
+- goal:
+  - 10
+  - 11
+  start:
+  - 2
+  - 10
+  start_time: 224
+  task_name: task48
+- goal:
+  - 12
+  - 10
+  start:
+  - 3
+  - 2
+  start_time: 224
+  task_name: task49
+- goal:
+  - 12
+  - 10
+  start:
+  - 17
+  - 16
+  start_time: 230
+  task_name: task50
+- goal:
+  - 10
+  - 11
+  start:
+  - 17
+  - 2
+  start_time: 231
+  task_name: task51
+- goal:
+  - 10
+  - 11
+  start:
+  - 7
+  - 8
+  start_time: 238
+  task_name: task52
+- goal:
+  - 8
+  - 10
+  start:
+  - 3
+  - 2
+  start_time: 239
+  task_name: task53
+- goal:
+  - 8
+  - 10
+  start:
+  - 3
+  - 2
+  start_time: 253
+  task_name: task54
+- goal:
+  - 12
+  - 10
+  start:
+  - 16
+  - 0
+  start_time: 256
+  task_name: task55
+- goal:
+  - 8
+  - 10
+  start:
+  - 2
+  - 4
+  start_time: 256
+  task_name: task56
+- goal:
+  - 12
+  - 10
+  start:
+  - 5
+  - 18
+  start_time: 259
+  task_name: task57
+- goal:
+  - 10
+  - 10
+  start:
+  - 15
+  - 16
+  start_time: 266
+  task_name: task58
+- goal:
+  - 10
+  - 10
+  start:
+  - 19
+  - 18
+  start_time: 270
+  task_name: task59
+- goal:
+  - 8
+  - 10
+  start:
+  - 1
+  - 6
+  start_time: 274
+  task_name: task60
+- goal:
+  - 10
+  - 11
+  start:
+  - 7
+  - 2
+  start_time: 275
+  task_name: task61
+- goal:
+  - 12
+  - 10
+  start:
+  - 14
+  - 2
+  start_time: 280
+  task_name: task62
+- goal:
+  - 8
+  - 10
+  start:
+  - 17
+  - 0
+  start_time: 282
+  task_name: task63
+- goal:
+  - 12
+  - 10
+  start:
+  - 3
+  - 2
+  start_time: 284
+  task_name: task64
+- goal:
+  - 10
+  - 10
+  start:
+  - 17
+  - 18
+  start_time: 292
+  task_name: task65
+- goal:
+  - 10
+  - 11
+  start:
+  - 10
+  - 8
+  start_time: 300
+  task_name: task66
+- goal:
+  - 10
+  - 11
+  start:
+  - 1
+  - 0
+  start_time: 306
+  task_name: task67
+- goal:
+  - 10
+  - 10
+  start:
+  - 13
+  - 14
+  start_time: 316
+  task_name: task68
+- goal:
+  - 12
+  - 10
+  start:
+  - 14
+  - 18
+  start_time: 316
+  task_name: task69
+- goal:
+  - 10
+  - 10
+  start:
+  - 5
+  - 16
+  start_time: 323
+  task_name: task70
+- goal:
+  - 8
+  - 10
+  start:
+  - 12
+  - 0
+  start_time: 325
+  task_name: task71
+- goal:
+  - 12
+  - 10
+  start:
+  - 18
+  - 0
+  start_time: 337
+  task_name: task72
+- goal:
+  - 10
+  - 11
+  start:
+  - 14
+  - 2
+  start_time: 347
+  task_name: task73
+- goal:
+  - 12
+  - 10
+  start:
+  - 18
+  - 14
+  start_time: 354
+  task_name: task74
+- goal:
+  - 8
+  - 10
+  start:
+  - 3
+  - 6
+  start_time: 375
+  task_name: task75
+- goal:
+  - 12
+  - 10
+  start:
+  - 18
+  - 0
+  start_time: 382
+  task_name: task76
+- goal:
+  - 10
+  - 11
+  start:
+  - 18
+  - 4
+  start_time: 394
+  task_name: task77
+- goal:
+  - 12
+  - 10
+  start:
+  - 8
+  - 6
+  start_time: 410
+  task_name: task78
+- goal:
+  - 10
+  - 10
+  start:
+  - 8
+  - 14
+  start_time: 415
+  task_name: task79
+- goal:
+  - 12
+  - 10
+  start:
+  - 19
+  - 16
+  start_time: 427
+  task_name: task80
+- goal:
+  - 8
+  - 10
+  start:
+  - 11
+  - 14
+  start_time: 428
+  task_name: task81
+- goal:
+  - 8
+  - 10
+  start:
+  - 17
+  - 18
+  start_time: 429
+  task_name: task82
+- goal:
+  - 10
+  - 10
+  start:
+  - 3
+  - 6
+  start_time: 430
+  task_name: task83
+- goal:
+  - 10
+  - 10
+  start:
+  - 1
+  - 4
+  start_time: 434
+  task_name: task84
+- goal:
+  - 10
+  - 10
+  start:
+  - 6
+  - 16
+  start_time: 451
+  task_name: task85
+- goal:
+  - 10
+  - 10
+  start:
+  - 2
+  - 14
+  start_time: 455
+  task_name: task86
+- goal:
+  - 10
+  - 10
+  start:
+  - 13
+  - 8
+  start_time: 468
+  task_name: task87
+- goal:
+  - 8
+  - 10
+  start:
+  - 16
+  - 2
+  start_time: 480
+  task_name: task88
+- goal:
+  - 12
+  - 10
+  start:
+  - 8
+  - 2
+  start_time: 482
+  task_name: task89
+- goal:
+  - 12
+  - 10
+  start:
+  - 17
+  - 6
+  start_time: 485
+  task_name: task90
+- goal:
+  - 12
+  - 10
+  start:
+  - 8
+  - 14
+  start_time: 489
+  task_name: task91
+- goal:
+  - 8
+  - 10
+  start:
+  - 12
+  - 12
+  start_time: 492
+  task_name: task92
+- goal:
+  - 12
+  - 10
+  start:
+  - 18
+  - 18
+  start_time: 492
+  task_name: task93
+- goal:
+  - 10
+  - 10
+  start:
+  - 5
+  - 16
+  start_time: 511
+  task_name: task94
+- goal:
+  - 8
+  - 10
+  start:
+  - 19
+  - 16
+  start_time: 512
+  task_name: task95
+- goal:
+  - 10
+  - 10
+  start:
+  - 7
+  - 14
+  start_time: 513
+  task_name: task96
+- goal:
+  - 10
+  - 11
+  start:
+  - 1
+  - 16
+  start_time: 611
+  task_name: task97
+- goal:
+  - 10
+  - 10
+  start:
+  - 7
+  - 14
+  start_time: 612
+  task_name: task98
+- goal:
+  - 10
+  - 10
+  start:
+  - 6
+  - 16
+  start_time: 612
+  task_name: task99
+- goal:
+  - 10
+  - 11
+  start:
+  - 7
+  - 16
+  start_time: 622
+  task_name: task100
+- goal:
+  - 8
+  - 10
+  start:
+  - 13
+  - 18
+  start_time: 632
+  task_name: task101
+- goal:
+  - 10
+  - 10
+  start:
+  - 7
+  - 0
+  start_time: 635
+  task_name: task102
+- goal:
+  - 10
+  - 10
+  start:
+  - 18
+  - 4
+  start_time: 646
+  task_name: task103
+- goal:
+  - 12
+  - 10
+  start:
+  - 2
+  - 4
+  start_time: 654
+  task_name: task104
+- goal:
+  - 8
+  - 10
+  start:
+  - 1
+  - 14
+  start_time: 662
+  task_name: task105
+- goal:
+  - 8
+  - 10
+  start:
+  - 1
+  - 18
+  start_time: 676
+  task_name: task106
+- goal:
+  - 8
+  - 10
+  start:
+  - 15
+  - 6
+  start_time: 678
+  task_name: task107
+- goal:
+  - 12
+  - 10
+  start:
+  - 7
+  - 12
+  start_time: 683
+  task_name: task108
+- goal:
+  - 12
+  - 10
+  start:
+  - 20
+  - 6
+  start_time: 686
+  task_name: task109
+- goal:
+  - 10
+  - 11
+  start:
+  - 18
+  - 0
+  start_time: 691
+  task_name: task110
+- goal:
+  - 10
+  - 10
+  start:
+  - 8
+  - 14
+  start_time: 692
+  task_name: task111
+- goal:
+  - 10
+  - 10
+  start:
+  - 5
+  - 6
+  start_time: 693
+  task_name: task112
+- goal:
+  - 8
+  - 10
+  start:
+  - 17
+  - 18
+  start_time: 703
+  task_name: task113
+- goal:
+  - 12
+  - 10
+  start:
+  - 3
+  - 18
+  start_time: 705
+  task_name: task114
+- goal:
+  - 10
+  - 11
+  start:
+  - 1
+  - 10
+  start_time: 706
+  task_name: task115
+- goal:
+  - 10
+  - 10
+  start:
+  - 8
+  - 4
+  start_time: 707
+  task_name: task116
+- goal:
+  - 10
+  - 11
+  start:
+  - 12
+  - 8
+  start_time: 719
+  task_name: task117
+- goal:
+  - 10
+  - 11
+  start:
+  - 9
+  - 2
+  start_time: 725
+  task_name: task118
+- goal:
+  - 8
+  - 10
+  start:
+  - 17
+  - 18
+  start_time: 725
+  task_name: task119
+- goal:
+  - 10
+  - 11
+  start:
+  - 18
+  - 2
+  start_time: 726
+  task_name: task120
+- goal:
+  - 10
+  - 11
+  start:
+  - 1
+  - 4
+  start_time: 728
+  task_name: task121
+- goal:
+  - 10
+  - 10
+  start:
+  - 18
+  - 0
+  start_time: 733
+  task_name: task122
+- goal:
+  - 12
+  - 10
+  start:
+  - 17
+  - 6
+  start_time: 736
+  task_name: task123
+- goal:
+  - 8
+  - 10
+  start:
+  - 12
+  - 12
+  start_time: 738
+  task_name: task124
+- goal:
+  - 8
+  - 10
+  start:
+  - 11
+  - 8
+  start_time: 746
+  task_name: task125
+- goal:
+  - 10
+  - 11
+  start:
+  - 1
+  - 14
+  start_time: 747
+  task_name: task126
+- goal:
+  - 12
+  - 10
+  start:
+  - 8
+  - 4
+  start_time: 756
+  task_name: task127
+tasks_guest:
+- goal:
+  - 0
+  - 13
+  start:
+  - 1
+  - 18
+  start_time: 604
+  task_name: task128
+- goal:
+  - 0
+  - 11
+  start:
+  - 3
+  - 18
+  start_time: 610
+  task_name: task129
+- goal:
+  - 0
+  - 13
+  start:
+  - 1
+  - 14
+  start_time: 641
+  task_name: task130
+- goal:
+  - 0
+  - 13
+  start:
+  - 20
+  - 4
+  start_time: 661
+  task_name: task131
+- goal:
+  - 17
+  - 11
+  start:
+  - 12
+  - 14
+  start_time: 674
+  task_name: task132
+- goal:
+  - 20
+  - 11
+  start:
+  - 13
+  - 8
+  start_time: 682
+  task_name: task133
+- goal:
+  - 0
+  - 13
+  start:
+  - 9
+  - 8
+  start_time: 695
+  task_name: task134
+- goal:
+  - 3
+  - 11
+  start:
+  - 1
+  - 2
+  start_time: 696
+  task_name: task135
+- goal:
+  - 20
+  - 11
+  start:
+  - 3
+  - 2
+  start_time: 697
+  task_name: task136
+- goal:
+  - 3
+  - 11
+  start:
+  - 5
+  - 6
+  start_time: 701
+  task_name: task137
+- goal:
+  - 0
+  - 13
+  start:
+  - 17
+  - 18
+  start_time: 707
+  task_name: task138
+- goal:
+  - 3
+  - 11
+  start:
+  - 4
+  - 0
+  start_time: 718
+  task_name: task139
+- goal:
+  - 0
+  - 11
+  start:
+  - 6
+  - 6
+  start_time: 722
+  task_name: task140
+- goal:
+  - 0
+  - 11
+  start:
+  - 6
+  - 4
+  start_time: 723
+  task_name: task141
+- goal:
+  - 0
+  - 11
+  start:
+  - 2
+  - 4
+  start_time: 732
+  task_name: task142
+- goal:
+  - 0
+  - 11
+  start:
+  - 8
+  - 12
+  start_time: 739
+  task_name: task143
+- goal:
+  - 0
+  - 13
+  start:
+  - 1
+  - 0
+  start_time: 741
+  task_name: task144
+- goal:
+  - 20
+  - 11
+  start:
+  - 18
+  - 14
+  start_time: 744
+  task_name: task145
+- goal:
+  - 0
+  - 13
+  start:
+  - 13
+  - 18
+  start_time: 748
+  task_name: task146

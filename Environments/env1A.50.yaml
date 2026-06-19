@@ -1,0 +1,271 @@
+guests:
+-   start: [11, 2]
+    name: guest1 
+-   start: [11, 3]
+    name: guest2 
+agents:
+-   start: [11, 5]
+    name: agent1 
+-   start: [11, 7]
+    name: agent2 
+-   start: [11, 11]
+    name: agent3 
+map: 
+    dimensions: ([12, 12],)
+
+    obstacles: 
+    - !!python/tuple [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (7, 1), (8, 1), (9, 1), (1, 2), (2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), (8, 2), (9, 2), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5), (8, 5), (9, 5), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6), (6, 6), (7, 6), (8, 6), (9, 6), (1, 9), (2, 9), (3, 9), (4, 9), (5, 9), (6, 9), (7, 9), (8, 9), (9, 9), (1, 10), (2, 10), (3, 10), (4, 10), (5, 10), (6, 10), (7, 10), (8, 10), (9, 10)] 
+    non_task_endpoints: 
+    - !!python/tuple [(11, 5), (11, 7), (11, 11)] 
+    delivery_agents: 
+    - !!python/tuple [(11, 4), (11, 6), (11, 8), (11, 9), (11, 10)] 
+    non_task_endpoints_guests: 
+    - !!python/tuple [(11, 3), (11, 2)] 
+    delivery_guests: 
+    - !!python/tuple [11, 0] 
+    - !!python/tuple [11, 1] 
+
+tasks_guest: 
+-   start_time: 306
+    start: [3, 8]
+    goal: [11, 1]
+    task_name: task0
+-   start_time: 308
+    start: [3, 4]
+    goal: [11, 1]
+    task_name: task1
+-   start_time: 310
+    start: [7, 11]
+    goal: [11, 0]
+    task_name: task2
+-   start_time: 312
+    start: [2, 11]
+    goal: [11, 0]
+    task_name: task3
+-   start_time: 312
+    start: [7, 0]
+    goal: [11, 0]
+    task_name: task4
+-   start_time: 316
+    start: [3, 0]
+    goal: [11, 1]
+    task_name: task5
+-   start_time: 316
+    start: [2, 3]
+    goal: [11, 1]
+    task_name: task6
+-   start_time: 318
+    start: [7, 4]
+    goal: [11, 0]
+    task_name: task7
+-   start_time: 319
+    start: [9, 4]
+    goal: [11, 0]
+    task_name: task8
+-   start_time: 319
+    start: [7, 11]
+    goal: [11, 1]
+    task_name: task9
+
+tasks: 
+-   start_time: 0
+    start: [7, 7]
+    goal: [11, 8]
+    task_name: task0
+-   start_time: 1
+    start: [1, 3]
+    goal: [11, 6]
+    task_name: task1
+-   start_time: 3
+    start: [8, 7]
+    goal: [11, 4]
+    task_name: task2
+-   start_time: 3
+    start: [1, 4]
+    goal: [11, 9]
+    task_name: task3
+-   start_time: 3
+    start: [7, 11]
+    goal: [11, 8]
+    task_name: task4
+-   start_time: 4
+    start: [4, 3]
+    goal: [11, 10]
+    task_name: task5
+-   start_time: 13
+    start: [8, 8]
+    goal: [11, 6]
+    task_name: task6
+-   start_time: 15
+    start: [1, 11]
+    goal: [11, 6]
+    task_name: task7
+-   start_time: 16
+    start: [3, 0]
+    goal: [11, 10]
+    task_name: task8
+-   start_time: 19
+    start: [3, 3]
+    goal: [11, 6]
+    task_name: task9
+-   start_time: 19
+    start: [5, 8]
+    goal: [11, 4]
+    task_name: task10
+-   start_time: 21
+    start: [5, 11]
+    goal: [11, 4]
+    task_name: task11
+-   start_time: 21
+    start: [3, 11]
+    goal: [11, 8]
+    task_name: task12
+-   start_time: 21
+    start: [9, 11]
+    goal: [11, 8]
+    task_name: task13
+-   start_time: 24
+    start: [3, 11]
+    goal: [11, 8]
+    task_name: task14
+-   start_time: 25
+    start: [2, 7]
+    goal: [11, 8]
+    task_name: task15
+-   start_time: 27
+    start: [2, 0]
+    goal: [11, 6]
+    task_name: task16
+-   start_time: 27
+    start: [6, 7]
+    goal: [11, 8]
+    task_name: task17
+-   start_time: 29
+    start: [2, 8]
+    goal: [11, 8]
+    task_name: task18
+-   start_time: 30
+    start: [9, 0]
+    goal: [11, 9]
+    task_name: task19
+-   start_time: 30
+    start: [4, 0]
+    goal: [11, 10]
+    task_name: task20
+-   start_time: 31
+    start: [1, 4]
+    goal: [11, 8]
+    task_name: task21
+-   start_time: 34
+    start: [7, 4]
+    goal: [11, 8]
+    task_name: task22
+-   start_time: 36
+    start: [7, 8]
+    goal: [11, 10]
+    task_name: task23
+-   start_time: 37
+    start: [1, 8]
+    goal: [11, 8]
+    task_name: task24
+-   start_time: 37
+    start: [1, 11]
+    goal: [11, 4]
+    task_name: task25
+-   start_time: 39
+    start: [3, 3]
+    goal: [11, 9]
+    task_name: task26
+-   start_time: 40
+    start: [1, 0]
+    goal: [11, 4]
+    task_name: task27
+-   start_time: 44
+    start: [2, 7]
+    goal: [11, 6]
+    task_name: task28
+-   start_time: 45
+    start: [8, 7]
+    goal: [11, 4]
+    task_name: task29
+-   start_time: 46
+    start: [5, 8]
+    goal: [11, 4]
+    task_name: task30
+-   start_time: 46
+    start: [5, 7]
+    goal: [11, 4]
+    task_name: task31
+-   start_time: 49
+    start: [5, 8]
+    goal: [11, 9]
+    task_name: task32
+-   start_time: 49
+    start: [8, 4]
+    goal: [11, 9]
+    task_name: task33
+-   start_time: 51
+    start: [2, 7]
+    goal: [11, 9]
+    task_name: task34
+-   start_time: 52
+    start: [7, 8]
+    goal: [11, 9]
+    task_name: task35
+-   start_time: 52
+    start: [2, 3]
+    goal: [11, 4]
+    task_name: task36
+-   start_time: 54
+    start: [6, 7]
+    goal: [11, 6]
+    task_name: task37
+-   start_time: 55
+    start: [2, 11]
+    goal: [11, 8]
+    task_name: task38
+-   start_time: 58
+    start: [7, 3]
+    goal: [11, 4]
+    task_name: task39
+-   start_time: 301
+    start: [5, 7]
+    goal: [11, 9]
+    task_name: task40
+-   start_time: 301
+    start: [8, 8]
+    goal: [11, 9]
+    task_name: task41
+-   start_time: 302
+    start: [3, 0]
+    goal: [11, 10]
+    task_name: task42
+-   start_time: 302
+    start: [4, 4]
+    goal: [11, 8]
+    task_name: task43
+-   start_time: 306
+    start: [2, 0]
+    goal: [11, 9]
+    task_name: task44
+-   start_time: 308
+    start: [9, 4]
+    goal: [11, 9]
+    task_name: task45
+-   start_time: 308
+    start: [7, 7]
+    goal: [11, 9]
+    task_name: task46
+-   start_time: 311
+    start: [8, 8]
+    goal: [11, 10]
+    task_name: task47
+-   start_time: 317
+    start: [1, 3]
+    goal: [11, 4]
+    task_name: task48
+-   start_time: 319
+    start: [4, 7]
+    goal: [11, 4]
+    task_name: task49
+
