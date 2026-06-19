@@ -12,10 +12,9 @@ from heapq import heappush, heappop, heapify
 from itertools import count
 import networkx as nx
 
-class AStar:
+class LowLevelPlanner:
     def __init__(self, env):
         self.agent_dict = env.agent_dict
-        self.admissible_heuristic = env.admissible_heuristic
         self.is_at_goal = env.is_at_goal
         self.get_neighbors = env.get_neighbors
         self.max_iter = env.a_star_max_iter
@@ -29,8 +28,69 @@ class AStar:
             total_path.append(current)
         return total_path[::-1]
 
+    def search(self, agent_name):
+        raise NotImplementedError()
 
+class AStar(LowLevelPlanner):
+    def __init__(self, env):
+        super().__init__(env)
+        self.admissible_heuristic = env.admissible_heuristic
 
+    def search(self, agent_name):
+        """Low level search."""
+        initial_state = self.agent_dict[agent_name]["start"]
+
+        closed_set = set()
+        open_set = {initial_state}
+
+        predecessors = {}
+
+        g_score = {}
+        g_score[initial_state] = 0
+
+        f_score = {}
+        h_score = self.admissible_heuristic(initial_state, agent_name)
+        f_score[initial_state] = h_score
+
+        heap = []
+        index = count(0)
+        heappush(heap, (f_score[initial_state], h_score, next(index), initial_state))
+
+        while open_set and (self.max_iter == -1 or self.iter < self.max_iter):
+            self.iter = self.iter + 1
+            if self.iter == self.max_iter:
+                logging.warning('Low level A* - Maximum iteration reached')
+
+            current = heappop(heap)[3]
+
+            if self.is_at_goal(current, agent_name):
+                return self.reconstruct_path(predecessors, current)
+
+            open_set -= {current}
+            closed_set |= {current}
+
+            for (neighbor, step_cost) in self.get_neighbors(current):
+                if neighbor in closed_set:
+                    continue
+
+                tentative_g_score = g_score.setdefault(current, float("inf")) + step_cost
+
+                if neighbor not in open_set:
+                    open_set |= {neighbor}
+                elif tentative_g_score >= g_score.setdefault(neighbor, float("inf")):
+                    continue
+
+                predecessors[neighbor] = current
+
+                g_score[neighbor] = tentative_g_score
+                h_score = self.admissible_heuristic(neighbor, agent_name)
+                f_score[neighbor] = g_score[neighbor] + h_score
+                heappush(heap, (f_score[neighbor], h_score, next(index), neighbor))
+        return False
+
+class Dijkstra(LowLevelPlanner):
+    def __init__(self, env):
+        super().__init__(env)
 
     def _weight_function(self, graph, weight):
         if callable(weight):
@@ -143,27 +203,8 @@ class AStar:
         """Low level search."""
 
         initial_state = self.agent_dict[agent_name]["start"]
-        step_cost = 1
-
-        closed_set = set()
-        open_set = {initial_state}
-
-        came_from = {}
-
-        g_score = {}
-        g_score[initial_state] = 0
-
-        f_score = {}
-        #h1_score = self.admissible_heuristic(initial_state, agent_name)
-        #f_score[initial_state] = h1_score
-
-        heap = []
-        index = count(0)
-        #heapq.heappush(heap, (f_score[initial_state], h1_score, next(index), initial_state))
-
         source = (self.time_start, initial_state.location.x, initial_state.location.y)
         target=(self.agent_dict[agent_name]["goal"].location.x,self.agent_dict[agent_name]["goal"].location.y)
-
 
         try:
             path_def = self.dijkstra_path(source=source,target=target)
@@ -172,7 +213,7 @@ class AStar:
             logging.info('Path not found')
             return False
 
-class Dijkstra(AStar):
+class Dijkstra2(LowLevelPlanner):
     def __init__(self, env):
         super().__init__(env)
 

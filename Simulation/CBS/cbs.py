@@ -13,7 +13,7 @@ from math import fabs
 from itertools import combinations
 from copy import deepcopy
 
-from Simulation.CBS.a_star import AStar, Dijkstra
+from Simulation.CBS.low_level_planner import AStar, Dijkstra, Dijkstra2
 #from Simulation.simulation_new_recovery import SimulationNewRecovery
 
 class Location(object):
@@ -117,7 +117,7 @@ class Environment(object):
         self.constraints = Constraints()
         self.constraint_dict = {}
 
-        self.a_star = AStar(self)
+        self.low_level_planner = Dijkstra(self)
 
     def get_neighbors(self, state):
         if type(state) != State:
@@ -264,9 +264,9 @@ class Environment(object):
         solution = {}
         for agent in self.agent_dict.keys():
             self.constraints = self.constraint_dict.setdefault(agent, Constraints())
-            #local_solution = self.a_star.search(agent)
-            # TODO @bonaluca: remove this, a_star.search() should return a list of State
-            path_def = self.a_star.search(agent)
+            #local_solution = self.low_level_planner.search(agent)
+            # TODO @bonaluca: remove this, low_level_planner.search() should return a list of State
+            path_def = self.low_level_planner.search(agent)
             if path_def != False and not isinstance(path_def[0], State):
                 t = 0
                 local_solution = []
@@ -292,7 +292,7 @@ class DynamicEnvironment(Environment):
 
         self.weight_function = weight_function
         self.occupancy_model = occupancy_model
-        #self.a_star = Dijkstra(self)
+        self.low_level_planner = Dijkstra(self)
 
     def get_edge_weight(self, u, v):
         """Return the weight of the edge between states u and v."""
