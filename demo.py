@@ -30,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('-map_name', help='Name of map chosen', default=None, type=str)
     parser.add_argument('-obs_time', help='Observation time of guests agents', default=300, type=int)
     parser.add_argument('-strict_idle', help='Guests can idle only at non-task endpoints', action='store_true')
+    parser.add_argument('-cross_goals', help='Agents can cross guests\' delivery locations', action='store_true')
     parser.add_argument('-order', help='Order of the model', default=0, type=int, choices=[0, 1, 2, 3])
     parser.add_argument('-smoothing', help='Apply smoothing to the transition matrix', action='store_true')
     parser.add_argument('-d', help='Output directory', default='output')
@@ -69,8 +70,17 @@ if __name__ == '__main__':
     non_task_endpoints_guests = list(map(lambda x: tuple(x), param['map']['non_task_endpoints_guests']))
     delivery_agents = list(map(lambda x: tuple(x), param['map']['delivery_agents']))
     delivery_guests = list(map(lambda x: tuple(x), param['map']['delivery_guests']))
-    obstacles_agents = obstacles+non_task_endpoints_guests+delivery_guests
-    obstacles_guests = obstacles+non_task_endpoints+delivery_agents
+    obstacles_agents = obstacles + non_task_endpoints_guests# + delivery_guests
+    if args.cross_goals:
+        # Agents can cross guest deliveries but not pickups
+        pickup_guests = list(set(map(
+            lambda x: tuple(x['start']),
+            param['tasks_guest']
+        )))
+        obstacles_agents += pickup_guests
+    else:
+        obstacles_agents += delivery_guests
+    obstacles_guests = obstacles + non_task_endpoints + delivery_agents
     agents = param['agents']
     guests = param['guests']
     tasks = param['tasks']
