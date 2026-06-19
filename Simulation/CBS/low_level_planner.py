@@ -10,6 +10,7 @@ import logging
 from collections import deque
 from heapq import heappush, heappop, heapify
 from itertools import count
+from Simulation.exceptions import PathNotFoundError
 
 class LowLevelPlanner:
     def __init__(self, env):
@@ -128,7 +129,7 @@ class Dijkstra(LowLevelPlanner):
 
     def multi_source_dijkstra(self, sources, target=None, cutoff=None):
         if not sources:
-            raise ValueError("sources must not be empty")
+            raise PathNotFoundError("sources must not be empty")
         if target in sources:
             return (0, [target])
         paths = {source: [source] for source in sources}  # dictionary of paths
@@ -181,7 +182,7 @@ class Dijkstra(LowLevelPlanner):
                     u_dist = dist[u]
                     if vu_dist < u_dist:
                         logging.error("Contradictory paths found: negative weights?")
-                        raise ValueError("Contradictory paths found:", "negative weights?")
+                        raise PathNotFoundError("Contradictory paths found: negative weights?")
                     elif pred is not None and vu_dist == u_dist:
                         pred[u].append(v)
                 elif u not in seen or vu_dist < seen[u]:
@@ -208,7 +209,7 @@ class Dijkstra(LowLevelPlanner):
         try:
             path_def = self.dijkstra_path(source=source,target=target)
             return path_def
-        except: # TODO @bonaluca: don't catch just any exception
+        except PathNotFoundError:
             logging.info('Path not found')
             return False
 
