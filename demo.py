@@ -23,7 +23,7 @@ if __name__ == '__main__':
                                         'before exceeds the probability threshold (p-TP)',
                         default=1, type=int)
     parser.add_argument('-a_star_max_iter', help='Maximum number of states explored by the low-level algorithm',
-                        default=50000, type=int)
+                        default=500000, type=int)
     parser.add_argument('-slow_factor', help='Slow factor of visualization', default=1, type=int)
     parser.add_argument('-not_rand', help='Use if input has fixed tasks', action='store_true')
     parser.add_argument('-alpha', help='Parameter for balance between distance and occupancy', default=None, type=float)
@@ -34,6 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('-cross_goals', help='Agents can cross guests\' delivery locations', action='store_true')
     parser.add_argument('-weight_function', help='Weight function to combine distance and occupancy',
                         choices=['convex', 'exp'], default='convex')
+    parser.add_argument('-guest_algo', help='Low-level algorithm used for guest planning', default=None, choices=['astar', 'dijkstra'])
     parser.add_argument('-order', help='Order of the model', default=0, type=int, choices=[0, 1, 2, 3])
     parser.add_argument('-prune_thres', help='Minimum threshold for the occupancy probability', type=float, default=None)
     parser.add_argument('-smoothing', help='Apply smoothing to the transition matrix', action='store_true')
@@ -134,7 +135,8 @@ if __name__ == '__main__':
         tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests,
         dimensions, occupancy_model, alpha=args.alpha, full_sight=args.full_sight,
         forbidden_moves_agents=forbidden_moves_agents,
-        weight_function=args.weight_function
+        weight_function=args.weight_function,
+        guest_algorithm=args.guest_algo
     )
     a_star_max_iter = 4000
     observation_time=args.obs_time

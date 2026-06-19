@@ -1,14 +1,14 @@
 import logging
 import time
 import random
-from math import fabs
+from math import fabs, log2
 import networkx as nx
 from Simulation.CBS.cbs import CBS, DynamicEnvironment
 from Simulation.exceptions import NotFittedError, PathNotFoundError
 
 class SimulationNewRecovery(object):
     random.seed(1234)
-    def __init__(self, tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha, full_sight=False, weight_function='convex', forbidden_moves_agents=[]):
+    def __init__(self, tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha, full_sight=False, weight_function='convex', forbidden_moves_agents=[], guest_algorithm=None):
         self.tasks = tasks #tasks of the agents
         self.tasks_guest = tasks_guest #tasks of the guests
         self.agents = agents #the agents
@@ -17,6 +17,7 @@ class SimulationNewRecovery(object):
         self.obstacles_guests = obstacles_guests #the obstacles for the guests
         self.dimensions = dimensions #the dimensions of the grid
         self.forbidden_moves_agents = forbidden_moves_agents #forbidden moves for agents
+        self.guest_algorithm = guest_algorithm or ('astar' if weight_function == 'exp' else 'dijkstra')
         self.occupancy_model = occupancy_model #the occupancy model of the agents
         self.alpha = alpha
         self.full_sight = full_sight #guests know where agents are after each time step
@@ -37,6 +38,9 @@ class SimulationNewRecovery(object):
         self.to_replan_from_goal = []
         self.guest_presence = False
         self.initialize_simulation(weight_function=weight_function)
+
+        if weight_function == 'convex' and self.guest_algorithm == 'astar':
+            raise ValueError('Can\'t use A*: L1 norm is not an admissible heuristic')
 
     def initialize_simulation(self, weight_function='convex'):
         self.deadlock = False
@@ -115,6 +119,10 @@ class SimulationNewRecovery(object):
             # Weight function that balances distance and probability of occupancy
             self.weight_function = lambda dist, prob_occ: \
                 1 / max((1 - prob_occ) ** (self.alpha), 5e-3)
+#        elif weight_function == 'exp':
+#            # Weight function that balances distance and probability of occupancy
+#            self.weight_function = lambda dist, prob_occ: \
+#                1 / max((1 - prob_occ) ** log2(1 + self.alpha), 5e-3)
         else:
             raise ValueError(f'Weight function {weight_function} not recognised.')
 
@@ -463,7 +471,8 @@ class SimulationNewRecovery(object):
             graph=self.get_graph_guests(),
             time_start=time_start,
             weight_function=self.weight_function,
-            occupancy_model=self.occupancy_model
+            occupancy_model=self.occupancy_model,
+            low_level_algo=self.guest_algorithm
         )
         cbs = CBS(env)
         new_plans = algorithm.search(cbs)
@@ -500,7 +509,8 @@ class SimulationNewRecovery(object):
                 graph=self.get_graph_guests(),
                 time_start=time_start,
                 weight_function=self.weight_function,
-                occupancy_model=self.occupancy_model
+                occupancy_model=self.occupancy_model,
+                low_level_algo=self.guest_algorithm
             )
             cbs = CBS(env)
             new_plan = algorithm.search(cbs)
@@ -554,7 +564,8 @@ class SimulationNewRecovery(object):
                 graph=self.get_graph_guests(),
                 time_start=time_start,
                 weight_function=self.weight_function,
-                occupancy_model=self.occupancy_model
+                occupancy_model=self.occupancy_model,
+                low_level_algo=self.guest_algorithm
             )
             cbs = CBS(env)
             path_to_task_start = algorithm.search(cbs)
@@ -580,7 +591,8 @@ class SimulationNewRecovery(object):
             graph=self.get_graph_guests(),
             time_start=time_start,
             weight_function=self.weight_function,
-            occupancy_model=self.occupancy_model
+            occupancy_model=self.occupancy_model,
+            low_level_algo=self.guest_algorithm
         )
         cbs = CBS(env)
         path_to_task_goal = algorithm.search(cbs)

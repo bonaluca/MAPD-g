@@ -271,12 +271,17 @@ class DynamicEnvironment(Environment):
     """Environment with occupancy model"""
 
     def __init__(self, dimension, agents, obstacles, moving_obstacles=None, a_star_max_iter=-1,
-    graph=None, time_start=0, weight_function=None, occupancy_model=None):
+    graph=None, time_start=0, weight_function=None, occupancy_model=None, low_level_algo='dijkstra'):
         super().__init__(dimension, agents, obstacles, moving_obstacles, a_star_max_iter, graph, time_start)
 
         self.weight_function = weight_function
         self.occupancy_model = occupancy_model
-        self.low_level_planner = Dijkstra(self)
+        if low_level_algo == 'dijkstra':
+            self.low_level_planner = Dijkstra(self)
+        elif low_level_algo == 'astar':
+            self.low_level_planner = AStar(self)
+        else:
+            raise ValueError(f'Unrecognized option {low_level_algo} for low level algorithm')
 
     def get_edge_weight(self, u, v):
         """Return the weight of the edge between states u and v."""

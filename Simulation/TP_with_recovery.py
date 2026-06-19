@@ -546,7 +546,8 @@ class TokenPassingRecovery(object):
             graph=self.simulation.get_graph_guests(),
             time_start=time_start,
             weight_function=self.simulation.weight_function,
-            occupancy_model=self.simulation.occupancy_model
+            occupancy_model=self.simulation.occupancy_model,
+            low_level_algo=self.simulation.guest_algorithm
         )
         cbs = CBS(env)
         path = self.search(cbs)
@@ -794,7 +795,8 @@ class TokenPassingRecovery(object):
                                 moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter,
                                 graph=self.simulation.get_graph_guests(),
                                 weight_function=self.simulation.weight_function,
-                                occupancy_model=self.simulation.occupancy_model)
+                                occupancy_model=self.simulation.occupancy_model,
+                                low_level_algo=self.simulation.guest_algorithm)
                 cbs = CBS(env)
                 path_to_task_start = self.search(cbs)
                 #print('path_to_task_start',path_to_task_start)
@@ -815,7 +817,8 @@ class TokenPassingRecovery(object):
                                     moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter, time_start=time_start,
                                     graph=self.simulation.get_graph_guests(),
                                     weight_function=self.simulation.weight_function,
-                                    occupancy_model=self.simulation.occupancy_model)
+                                    occupancy_model=self.simulation.occupancy_model,
+                                    low_level_algo=self.simulation.guest_algorithm)
                     cbs = CBS(env)
                     path_to_task_goal = self.search(cbs)
                     #print('path_to_task_goal',path_to_task_goal)
