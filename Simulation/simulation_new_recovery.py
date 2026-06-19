@@ -3,6 +3,7 @@ from turtle import pos
 import yaml
 import json
 import os
+import logging
 import time
 import random
 from math import fabs
@@ -69,7 +70,7 @@ class SimulationNewRecovery(object):
             #self.G_agents.add_weighted_edges_from(elist_agents)
         
         if self.time == 0:
-            print('Residential matrix inizialization')
+            logging.info('Residential matrix inizialization')
             elist_agents = []
             for i in range(0,dimensions[0]):
                 for j in range(0,dimensions[1]):
@@ -91,14 +92,14 @@ class SimulationNewRecovery(object):
             #print(self.G_agents)
 
         self.time = self.time + 1
-        print('Time:', self.time)
+        logging.info('Time: %s', self.time)
 
 
         if self.time < observation_time:
             self.G_guests = None
 
         if self.time == observation_time:
-            print('Guest matrix inizialization')
+            logging.info('Guest matrix inizialization')
             mat = np.zeros((dimensions[0],dimensions[1]))
             for agent_path in self.actual_paths.values():
                 for step in agent_path:
@@ -176,7 +177,7 @@ class SimulationNewRecovery(object):
                                 mat2[i][j] = self.alpha*mat[i][j] + ((1-self.alpha)/diam_g)
 
             mat2=np.rot90(mat2, k=1, axes=(0, 1))
-            print(mat2.tolist())
+            logging.info(mat2.tolist())
             self.G_guests = nx.MultiDiGraph()
             self.G_guests.add_weighted_edges_from(elist_guests)
         
@@ -296,7 +297,7 @@ class SimulationNewRecovery(object):
                     if now_next_agents[agent['name']][0] in surroundings: #if the agent is at most two step ahead of the guest
                         if now_next_agents[agent['name']][1] == tuple([x_new, y_new]): #if the next move of the agent is the next move of the guest
                             presence_conflicts = True
-                            print('VERTEX-CONFLICT with an idle guest',tuple([x_new, y_new]), now_next_agents[agent['name']][1])
+                            logging.info('VERTEX-CONFLICT with an idle guest (%d, %d) %s' ,x_new, y_new, now_next_agents[agent['name']][1])
                             #remove move if it is the same as the agent next move
                             for move in accepted_moves:
                                 for agent1 in self.agents:
@@ -379,12 +380,12 @@ class SimulationNewRecovery(object):
                             cbs = CBS(env)
                             path_to_task_start = algorithm.search(cbs)
                             if not path_to_task_start:
-                                print("REPLANNING 1 Solution not found to task start for guest", guest['name'], " idling at current position...")
+                                logging.info("REPLANNING 1 Solution not found to task start for guest %s idling at current position...", guest['name'])
                                 break
                                     # exit(1)
                             else:
                                 #once the path to the pick-up point has been found, we replan a path to the delivery point
-                                print("REPLANNING 1 Solution found to task start for guest", guest['name'], " searching solution to task goal...")
+                                logging.info("REPLANNING 1 Solution found to task start for guest %s searching solution to task goal...", guest['name'])
                                 #print('path_to_task_start',path_to_task_start)
                                 cost1 = env.compute_solution_cost(path_to_task_start)
                             
@@ -398,11 +399,11 @@ class SimulationNewRecovery(object):
                                 cbs = CBS(env)
                                 path_to_task_goal = algorithm.search(cbs)
                                 if not path_to_task_goal:
-                                    print("REPLANNING 1 Solution not found to task goal for guest", guest['name'], " idling at current position...")
+                                    logging.info("REPLANNING 1 Solution not found to task goal for guest %s idling at current position...", guest['name'])
                                     break
                                         # exit(1)
                                 else:
-                                    print("REPLANNING 1 Solution found to task goal for guest", guest['name'], " doing task...")
+                                    logging.info("REPLANNING 1 Solution found to task goal for guest %s doing task...", guest['name'])
                                     #print('path_to_task_goal',path_to_task_goal)
                                     cost2 = env.compute_solution_cost(path_to_task_goal)
                                     last_step = path_to_task_goal[guest['name']][-1]
@@ -432,12 +433,12 @@ class SimulationNewRecovery(object):
                             cbs = CBS(env)
                             path_to_task_goal = algorithm.search(cbs)
                             if not path_to_task_goal:
-                                print("REPLANNING 2 - Solution not found to task goal for guest", guest['name'], " idling at current position...")
+                                logging.info("REPLANNING 2 - Solution not found to task goal for guest %s idling at current position...", guest['name'])
                                 break
                                     # exit(1)
                             else:
                                 cost2 = env.compute_solution_cost(path_to_task_goal)
-                                print("REPLANNING 2 - Solution found to task goal for guest", guest['name'], " doing task...")
+                                logging.info("REPLANNING 2 - Solution found to task goal for guest %s doing task...", guest['name'])
                                 last_step = path_to_task_goal[guest['name']][-1]
                                 algorithm.update_ends_guests([current_guest_pos['x'], current_guest_pos['y']])
                                 algorithm.token['path_ends'].add(tuple([last_step['x'], last_step['y']]))
@@ -448,8 +449,8 @@ class SimulationNewRecovery(object):
                                 for el in path_to_task_goal[guest['name']]:
                                     algorithm.token['guests'][guest['name']].append([el['x'], el['y']])
                     else:
-                        print('DEADLOCK!2', tuple([x_new,y_new]))
-                        print(algorithm.get_token()['guests_to_tasks'][guest['name']])
+                        logging.error('DEADLOCK!2 (%d, %d)', x_new, y_new)
+                        logging.error(algorithm.get_token()['guests_to_tasks'][guest['name']])
                         exit(1)
 
             #we first consider the case of a guest that is still
@@ -476,7 +477,7 @@ class SimulationNewRecovery(object):
                     if now_next_agents[agent['name']][0] in surroundings: #if the agent is at most two step ahead of the guest
                         if now_next_agents[agent['name']][1] == tuple([x_new, y_new]): #if the next move of the agent is the next move of the guest
                             presence_conflicts = True
-                            print('VERTEX-CONFLICT with an idle guest',tuple([x_new, y_new]), now_next_agents[agent['name']][1])
+                            logging.info('VERTEX-CONFLICT with an idle guest',tuple([x_new, y_new]), now_next_agents[agent['name']][1])
                             #remove move if it is the same as the agent next move
                             for move in possible_moves:
                                 for agent1 in self.agents:
@@ -508,7 +509,7 @@ class SimulationNewRecovery(object):
                     if now_next_agents[agent['name']][0] in surroundings:
                         if tuple([x_new, y_new])== now_next_agents[agent['name']][0] and now_next_agents[agent['name']][1] == tuple([current_guest_pos['x'], current_guest_pos['y']]):
                             presence_conflicts = True
-                            print('EDGE-CONFLICT with an idle guest')
+                            logging.info('EDGE-CONFLICT with an idle guest')
                             #remove move if it is the same as the agent next move
                             for move in possible_moves:
                                 for agent1 in self.agents:
@@ -536,14 +537,14 @@ class SimulationNewRecovery(object):
 
                 #if there are conflicts but there is no possible move for the guest, then there is a deadlock
                 if presence_conflicts is True and possible_moves == []:
-                    print('DEADLOCK ERROR!', tuple([x_new,y_new]))
-                    print(algorithm.get_token()['guests_to_tasks'][guest['name']])
+                    logging.error('DEADLOCK ERROR! (%d, %d)', x_new, y_new)
+                    logging.error(algorithm.get_token()['guests_to_tasks'][guest['name']])
                     exit(1)
 
                 # if the presence of conflicts is true, we change the next move of the guest (choosinig a random one) and replan
                 if presence_conflicts is True:
                     move = random.choice(possible_moves)
-                    print('chosen move',guest['name'],move)
+                    logging.info('chosen move %s: (%d, %d)', guest['name'], move[0], move[1])
                     x_new = move[0]
                     y_new = move[1]
                     self.n_replanning_guest += 1

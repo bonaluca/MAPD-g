@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, '../')
 import argparse
 import yaml
+import logging
 from math import fabs
 from itertools import combinations
 from copy import deepcopy
@@ -121,23 +122,23 @@ class Environment(object):
         # Wait action
         n = State(state.time + 1, state.location)
         if self.state_valid(n):
-            neighbors.append(n)
+            neighbors.append((n, self.get_edge_weight(state, n)))
         # Up action
         n = State(state.time + 1, Location(state.location.x, state.location.y+1))
         if self.state_valid(n) and self.transition_valid(state, n):
-            neighbors.append(n)
+            neighbors.append((n, self.get_edge_weight(state, n)))
         # Down action
         n = State(state.time + 1, Location(state.location.x, state.location.y-1))
         if self.state_valid(n) and self.transition_valid(state, n):
-            neighbors.append(n)
+            neighbors.append((n, self.get_edge_weight(state, n)))
         # Left action
         n = State(state.time + 1, Location(state.location.x-1, state.location.y))
         if self.state_valid(n) and self.transition_valid(state, n):
-            neighbors.append(n)
+            neighbors.append((n, self.get_edge_weight(state, n)))
         # Right action
         n = State(state.time + 1, Location(state.location.x+1, state.location.y))
         if self.state_valid(n) and self.transition_valid(state, n):
-            neighbors.append(n)
+            neighbors.append((n, self.get_edge_weight(state, n)))
         return neighbors
 
 
@@ -202,6 +203,15 @@ class Environment(object):
             return solution[agent_name][t]
         else:
             return solution[agent_name][-1]
+
+    def get_edge_weight(self, u, v):
+        """Return the weight of the edge between states u and v."""
+
+        if isinstance(u, State):
+            u = (u.location.x, u.location.y)
+        if isinstance(v, State):
+            v = (v.location.x, v.location.y)
+        return self.graph.get_edge_data(u, v, 0).get('weight', 1)
 
     def get_all_obstacles(self, time):
         all_obs = set()
@@ -310,11 +320,11 @@ class CBS(object):
             self.env.constraint_dict = P.constraint_dict
             conflict_dict = self.env.get_first_conflict(P.solution)
             if not conflict_dict:
-                print("Low level CBS - Solution found")
+                logging.info("Low level CBS - Solution found")
 
                 return self.generate_plan(P.solution)
             else:
-                print('THERE IS A CONFLICT TO ADD')
+                logging.info('THERE IS A CONFLICT TO ADD')
 
             constraint_dict = self.env.create_constraints_from_conflict(conflict_dict)
 
@@ -358,7 +368,7 @@ if __name__ == "__main__":
         try:
             param = yaml.load(param_file, Loader=yaml.FullLoader)
         except yaml.YAMLError as exc:
-            print(exc)
+            logging.error(exc)
 
     dimension = param["map"]["dimensions"]
     obstacles = param["map"]["obstacles"]
@@ -370,7 +380,7 @@ if __name__ == "__main__":
     cbs = CBS(env)
     solution = cbs.search()
     if not solution:
-        print("Solution not found")
+        logging.info("Solution not found")
         exit(0)
 
     # Write to output file
@@ -378,7 +388,7 @@ if __name__ == "__main__":
         try:
             output = yaml.load(output_yaml, Loader=yaml.FullLoader)
         except yaml.YAMLError as exc:
-            print(exc)
+            logging.error(exc)
 
     output["schedule"] = solution
     output["cost"] = env.compute_solution_cost(solution)

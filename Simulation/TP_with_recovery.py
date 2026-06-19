@@ -5,6 +5,7 @@ author: Giacomo Lodigiani (@Lodz97)
 from math import fabs
 import random
 from Simulation.CBS.cbs import CBS, Environment
+import logging
 from collections import defaultdict
 
 class TokenPassingRecovery(object):
@@ -20,7 +21,7 @@ class TokenPassingRecovery(object):
         self.non_task_endpoints = non_task_endpoints
         self.non_task_endpoints_guests = non_task_endpoints_guests
         if len(agents) > len(non_task_endpoints) or len(guests) > len(non_task_endpoints_guests):
-            print('There are more agents and guests than non task endpoints, instance is not well-formed.')
+            logging.error('There are more agents and guests than non task endpoints, instance is not well-formed.')
             exit(1)
         # TODO: Check all properties for well-formedness
         self.token = {}
@@ -29,31 +30,31 @@ class TokenPassingRecovery(object):
         self.k = k
         self.p_max = p_max
         if self.p_max != 1:
-            print('p_max must be 1.')
+            logging.error('p_max must be 1.')
             exit(-1)
         if self.k != 0 and self.p_max != 1:
-            print('Use of k and p robustness at same time not allowed.')
+            logging.error('Use of k and p robustness at same time not allowed.')
             exit(-1)
         if self.k < 0:
-            print('k should be >= 0.')
+            logging.error('k should be >= 0.')
             exit(1)
         if self.k == 0 and not new_recovery:
-            print('k = 0 not supported for this recovery type.')
+            logging.error('k = 0 not supported for this recovery type.')
             exit(1)
         if self.k == 0:
             if (self.p_max < 0 or self.p_max > 1):
-                print('Max conflict probability must be between 0 and 1.')
+                logging.error('Max conflict probability must be between 0 and 1.')
                 exit(1)
             self.pd = pd
             if self.p_max != 1 and not self.pd:
-                print('To use p robustness need to set pd.')
+                logging.error('To use p robustness need to set pd.')
                 exit(1)
             if self.pd and (pd < 0 or pd > 1):
-                print('Probability of must be between 0 and 1.')
+                logging.error('Probability of must be between 0 and 1.')
                 exit(1)
             self.p_iter = p_iter
             if self.p_iter <= 0:
-                print('p_iter should be > 0.')
+                logging.error('p_iter should be > 0.')
                 exit(1)
         else:
             self.p_max = 1
@@ -134,10 +135,12 @@ class TokenPassingRecovery(object):
 
     #the admissible heuristic chosen in the Manhattan distance
     def admissible_heuristic(self, task_pos, agent_pos):
+        """The admissible heuristic chosen is the Manhattan distance."""
         return fabs(task_pos[0] - agent_pos[0]) + fabs(task_pos[1] - agent_pos[1])
 
     #given a set of tasks, it returns the closest one according to the heuristic chosen
     def get_closest_task_name(self, available_tasks, agent_pos):
+        """Given a set of tasks, return the closest one according to the heuristic chosen."""
         closest = list(available_tasks.keys())[0]
         dist = self.admissible_heuristic(available_tasks[closest][0], agent_pos)
         for task_name, task in available_tasks.items():
@@ -147,6 +150,7 @@ class TokenPassingRecovery(object):
 
     #it returns the paths of the agents / guests that are moving as obstacles
     def get_moving_obstacles_agents(self, agents, time_start):
+        """Return the paths of moving agents as obstacles."""
         obstacles = {}
         for name, path in agents.items():
             if len(path) > time_start and len(path) > 1:
@@ -163,6 +167,7 @@ class TokenPassingRecovery(object):
         return obstacles
 
     def get_moving_obstacles_guests(self, guests, time_start):
+        """Return the paths of moving guests as obstacles."""
         obstacles = {}
         for name, path in guests.items():
             if len(path) > time_start and len(path) > 1:
@@ -180,6 +185,7 @@ class TokenPassingRecovery(object):
 
     #it returns the positions of the agents / guests that are still as obstacles
     def get_idle_obstacles_agents(self, agents_paths, time_start):
+        """Return the positions of the agents that are still as obstacles."""
         obstacles = set()
         for path in agents_paths:
             if len(path) == 1:
@@ -189,6 +195,7 @@ class TokenPassingRecovery(object):
         return obstacles
 
     def get_idle_obstacles_guests(self, guests_paths, time_start):
+        """Return the positions of the guests that are still as obstacles."""
         obstacles = set()
         for path in guests_paths:
             if len(path) == 1:
@@ -199,6 +206,7 @@ class TokenPassingRecovery(object):
 
     #it checks if the agent / guest is on a cell that is the pick-up / delivery of a task
     def check_safe_idle(self, agent_pos):
+        """Check if the agent is on a cell that is the pick-up / delivery of a task."""
         for task in self.token['tasks'].items():
             if tuple(task[0]) == tuple(agent_pos) or tuple(task[1]) == tuple(agent_pos):
                 return False
@@ -208,6 +216,7 @@ class TokenPassingRecovery(object):
         return True
 
     def check_safe_idle_guest(self, agent_pos):
+        """Check if the guest is on a cell that is the pick-up / delivery of a task."""
         for task in self.token['tasks_guest'].items():
             if tuple(task[0]) == tuple(agent_pos) or tuple(task[1]) == tuple(agent_pos):
                 return False
@@ -218,6 +227,7 @@ class TokenPassingRecovery(object):
 
     #it returns the closest endpoint according to the defined heuristic
     def get_closest_non_task_endpoint(self, agent_pos):
+        """Return the closest endpoint according to the defined heuristic."""
         dist = -1
         res = -1
         for endpoint in self.non_task_endpoints:
@@ -231,11 +241,12 @@ class TokenPassingRecovery(object):
                         dist = tmp
                         res = endpoint
         if res == -1:
-            print('Error in finding non-task endpoint, is instance well-formed?')
+            logging.error('Error in finding non-task endpoint, is instance well-formed?')
             exit(1)
         return res
 
     def get_closest_non_task_endpoint_guests(self, agent_pos):
+        """Return the closest endpoint according to the defined heuristic."""
         dist = -1
         res = -1
         for endpoint in self.non_task_endpoints_guests:
@@ -249,18 +260,20 @@ class TokenPassingRecovery(object):
                         dist = tmp
                         res = endpoint
         if res == -1:
-            print('Error in finding non-task endpoint guests, is instance well-formed?')
+            logging.error('Error in finding non-task endpoint guests, is instance well-formed?')
             exit(1)
         return res
 
     #update of path ends for agents / guests
     def update_ends(self, agent_pos):
+        """Update of path ends for agents."""
         if tuple(agent_pos) in self.token['path_ends']:
             self.token['path_ends'].remove(tuple(agent_pos))
         elif tuple(agent_pos) in self.token['occupied_non_task_endpoints']:
             self.token['occupied_non_task_endpoints'].remove(tuple(agent_pos))        
 
     def update_ends_guests(self, agent_pos):
+        """Update of path ends for guests."""
         if tuple(agent_pos) in self.token['path_ends_guest']:
             self.token['path_ends_guest'].remove(tuple(agent_pos))
         elif tuple(agent_pos) in self.token['occupied_non_task_endpoints_guests']:
@@ -279,6 +292,7 @@ class TokenPassingRecovery(object):
         return goals
 
     def get_agents_to_tasks_starts_goals(self):
+        """Return the start and goal locations of all occupied agents."""
         starts_goals = set()
         for el in self.token['agents_to_tasks'].values():
             starts_goals.add(tuple(el['goal']))
@@ -286,6 +300,7 @@ class TokenPassingRecovery(object):
         return starts_goals
 
     def get_guests_to_tasks_starts_goals(self):
+        """Return the start and goal locations of all occupied guests."""
         starts_goals = set()
         for el in self.token['guests_to_tasks'].values():
             starts_goals.add(tuple(el['goal']))
@@ -321,7 +336,7 @@ class TokenPassingRecovery(object):
         if self.p_max == 1:
             path = cbs.search()
         else:
-            print("p_max must be 1")
+            logging.error("p_max must be 1")
         return path
 
     def go_to_closest_non_task_endpoint(self, agent_name, agent_pos, all_idle_agents):
@@ -334,11 +349,11 @@ class TokenPassingRecovery(object):
         cbs = CBS(env)
         path_to_non_task_endpoint = self.search(cbs)
         if not path_to_non_task_endpoint:
-            print("Solution to non-task endpoint not found for agent", agent_name, " instance is not well-formed.")
+            logging.error("Solution to non-task endpoint not found for agent %s instance is not well-formed.", agent_name)
             self.deadlock_recovery(agent_name, agent_pos, all_idle_agents, 4)
             # exit(1)
         else:
-            print('No available task for agent', agent_name, ' moving to safe idling position...')
+            logging.info('No available task for agent %s moving to safe idling position...', agent_name)
             self.update_ends(agent_pos)
             self.token['occupied_non_task_endpoints'].add(tuple(closest_non_task_endpoint))
             self.token['agents_to_tasks'][agent_name] = {'task_name': 'safe_idle', 'start': agent_pos,
@@ -359,11 +374,11 @@ class TokenPassingRecovery(object):
         cbs = CBS(env)
         path_to_non_task_endpoint = self.search(cbs)
         if not path_to_non_task_endpoint:
-            print("Solution to non-task endpoint not found for guest", guest_name, " instance is not well-formed.1")
+            logging.error("Solution to non-task endpoint not found for guest %s instance is not well-formed.1", guest_name)
             self.deadlock_recovery_guest(guest_name, guest_pos, all_idle_guests, 4)
             # exit(1)
         else:
-            print('No available task for guest', guest_name, ' moving to safe idling position...')
+            logging.info('No available task for guest %s moving to safe idling position...', guest_name)
             self.update_ends_guests(guest_pos)
             self.token['occupied_non_task_endpoints_guests'].add(tuple(closest_non_task_endpoint))
             self.token['guests_to_tasks'][guest_name] = {'task_name': 'safe_idle', 'start': guest_pos,
@@ -384,11 +399,11 @@ class TokenPassingRecovery(object):
         cbs = CBS(env)
         path_to_non_task_endpoint = self.search(cbs)
         if not path_to_non_task_endpoint:
-            print("Solution to non-task endpoint not found for guest", guest_name, " instance is not well-formed.2")
+            logging.error("Solution to non-task endpoint not found for guest %s instance is not well-formed.2", guest_name)
             self.deadlock_recovery_guest(guest_name, guest_pos, all_idle_guests, 4)
             # exit(1)
         else:
-            print('No available task for guest', guest_name, ' moving to safe idling position2...')
+            logging.info('No available task for guest %s moving to safe idling position2...', guest_name)
             self.update_ends_guests(guest_pos)
             self.token['occupied_non_task_endpoints_guests'].add(tuple(closest_non_task_endpoint))
             self.token['guests_to_tasks'][guest_name] = {'task_name': 'safe_idle', 'start': guest_pos,
@@ -410,11 +425,11 @@ class TokenPassingRecovery(object):
         cbs = CBS(env)
         path_to_non_task_endpoint = self.search(cbs)
         if not path_to_non_task_endpoint:
-            print("Solution to non-task endpoint not found for guest", guest_name, " instance is not well-formed.3")
+            logging.error("Solution to non-task endpoint not found for guest %s instance is not well-formed.3", guest_name)
             self.deadlock_recovery_guest(guest_name, guest_pos, all_idle_guests, 4)
             # exit(1)
         else:
-            print('No available task for guest', guest_name, ' moving to safe idling position3...')
+            logging.info('No available task for guest %s moving to safe idling position3...', guest_name)
             self.update_ends_guests(guest_pos)
             self.token['occupied_non_task_endpoints_guests'].add(tuple(closest_non_task_endpoint))
             self.token['guests_to_tasks'][guest_name] = {'task_name': 'safe_idle', 'start': guest_pos,
@@ -489,36 +504,37 @@ class TokenPassingRecovery(object):
         # Update completed tasks for the agents
         for agent_name in self.token['agents']:
             pos = self.simulation.actual_paths[agent_name][-1]
-            if agent_name in self.token['agents_to_tasks'] and (pos['x'], pos['y']) == tuple(
-                    self.token['agents_to_tasks'][agent_name]['goal']) \
-                    and len(self.token['agents'][agent_name]) == 1 and self.token['agents_to_tasks'][agent_name][
-                'task_name'] != 'safe_idle':
+            if agent_name in self.token['agents_to_tasks'] \
+                    and (pos['x'], pos['y']) == tuple(self.token['agents_to_tasks'][agent_name]['goal']) \
+                    and len(self.token['agents'][agent_name]) == 1 \
+                    and self.token['agents_to_tasks'][agent_name]['task_name'] != 'safe_idle':
                 self.token['completed_tasks'] = self.token['completed_tasks'] + 1
                 self.token['completed_tasks_times'][
                     self.token['agents_to_tasks'][agent_name]['task_name']] = self.simulation.get_time()
                 self.token['agents_to_tasks'].pop(agent_name)
-            if agent_name in self.token['agents_to_tasks'] and (pos['x'], pos['y']) == tuple(
-                    self.token['agents_to_tasks'][agent_name]['goal']) \
-                    and len(self.token['agents'][agent_name]) == 1 and self.token['agents_to_tasks'][agent_name][
-                'task_name'] == 'safe_idle':
+            if agent_name in self.token['agents_to_tasks'] \
+                    and (pos['x'], pos['y']) == tuple(self.token['agents_to_tasks'][agent_name]['goal']) \
+                    and len(self.token['agents'][agent_name]) == 1 \
+                    and self.token['agents_to_tasks'][agent_name]['task_name'] == 'safe_idle':
                 self.token['agents_to_tasks'].pop(agent_name)
 
         # Update completed tasks for the guest
         for guest_name in self.token['guests']:
             pos = self.simulation.actual_paths_guests[guest_name][-1]
-            if guest_name in self.token['guests_to_tasks'] and (pos['x'], pos['y']) == tuple(
-                    self.token['guests_to_tasks'][guest_name]['goal']) \
-                    and len(self.token['guests'][guest_name]) == 1 and self.token['guests_to_tasks'][guest_name][
-                'task_name'] != 'safe_idle' and guest_name not in self.simulation.to_replan_from_start \
-                and guest_name not in self.simulation.to_replan_from_goal:
+            if guest_name in self.token['guests_to_tasks'] \
+                    and (pos['x'], pos['y']) == tuple(self.token['guests_to_tasks'][guest_name]['goal']) \
+                    and len(self.token['guests'][guest_name]) == 1 \
+                    and self.token['guests_to_tasks'][guest_name]['task_name'] != 'safe_idle' \
+                    and guest_name not in self.simulation.to_replan_from_start \
+                    and guest_name not in self.simulation.to_replan_from_goal:
                 self.token['completed_tasks_guest'] = self.token['completed_tasks_guest'] + 1
                 self.token['completed_tasks_times_guest'][
                     self.token['guests_to_tasks'][guest_name]['task_name']] = self.simulation.get_time()
                 self.token['guests_to_tasks'].pop(guest_name)
-            if guest_name in self.token['guests_to_tasks'] and (pos['x'], pos['y']) == tuple(
-                    self.token['guests_to_tasks'][guest_name]['goal']) \
-                    and len(self.token['guests'][guest_name]) == 1 and self.token['guests_to_tasks'][guest_name][
-                'task_name'] == 'safe_idle':
+            if guest_name in self.token['guests_to_tasks'] \
+                    and (pos['x'], pos['y']) == tuple(self.token['guests_to_tasks'][guest_name]['goal']) \
+                    and len(self.token['guests'][guest_name]) == 1 \
+                    and self.token['guests_to_tasks'][guest_name]['task_name'] == 'safe_idle':
                 self.token['guests_to_tasks'].pop(guest_name)
 
         
@@ -533,7 +549,7 @@ class TokenPassingRecovery(object):
                 if name not in self.token['agent_at_end_path']:
                     for i in range(len(path)):
                         if path[i] in self.token['agent_at_end_path_pos']:
-                            print('Agent', name, 'will impact end task agent, replanning...')
+                            logging.info('Agent %s will impact end task agent, replanning...', name)
                             # self.update_ends(path[-1])
                             if path[0] in self.non_task_endpoints:
                                 self.token['occupied_non_task_endpoints'].add(tuple(path[0]))
@@ -556,7 +572,7 @@ class TokenPassingRecovery(object):
                 if name not in self.token['guest_at_end_path']:
                     for i in range(len(path)):
                         if path[i] in self.token['guest_at_end_path_pos']:
-                            print('Guest', name, 'will impact end task guest, replanning...')
+                            logging.info('Guest %s will impact end task guest, replanning...', name)
                             # self.update_ends(path[-1])
                             if path[0] in self.non_task_endpoints_guests:
                                 self.token['occupied_non_task_endpoints_guests'].add(tuple(path[0]))
@@ -580,25 +596,30 @@ class TokenPassingRecovery(object):
         idle_agents = self.get_idle_agents() #prendo gli agenti che oziano
         while len(idle_agents) > 0:
             agent_name = list(idle_agents.keys())[0]
+            # `agent_name` executes now
             all_idle_agents = self.token['agents'].copy()
             all_idle_agents.pop(agent_name)
             agent_pos = idle_agents.pop(agent_name)[0]
+
+            # Collect tasks such that no other path in token ends in task_start or task_goal
             available_tasks = {}
             for task_name, task in self.token['tasks'].items():
-                if tuple(task[0]) not in self.token['path_ends'].difference({tuple(agent_pos)}) and tuple(
-                        task[1]) not in self.token['path_ends'].difference({tuple(agent_pos)}) \
-                        and tuple(task[0]) not in self.get_agents_to_tasks_goals() and tuple(
-                    task[1]) not in self.get_agents_to_tasks_goals():
+                task_start, task_goal = tuple(task[0]), tuple(task[1])
+                if task_start not in self.token['path_ends'].difference({tuple(agent_pos)}) \
+                        and task_goal not in self.token['path_ends'].difference({tuple(agent_pos)}) \
+                        and task_start not in self.get_agents_to_tasks_goals() \
+                        and task_goal not in self.get_agents_to_tasks_goals():
                     available_tasks[task_name] = task
+
             if len(available_tasks) > 0 or agent_name in self.token['agents_to_tasks']:
-                if agent_name in self.token['agents_to_tasks']:
-                    closest_task_name = self.token['agents_to_tasks'][agent_name]['task_name']
-                    closest_task = [self.token['agents_to_tasks'][agent_name]['start'],
-                    self.token['agents_to_tasks'][agent_name]['goal']]
-                else:
+                if agent_name not in self.token['agents_to_tasks']:
                     closest_task_name = self.get_closest_task_name(available_tasks, agent_pos)
                     closest_task = available_tasks[closest_task_name]
-                print('task_assegnato agente', closest_task)
+                else:
+                    closest_task_name = self.token['agents_to_tasks'][agent_name]['task_name']
+                    closest_task = [self.token['agents_to_tasks'][agent_name]['start'],
+                            self.token['agents_to_tasks'][agent_name]['goal']]
+                logging.info('task_assegnato agente %s', str(closest_task))
                 moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], 0)
                 idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 0)
                 #print('moving_obstacles_agents PER START1',moving_obstacles_agents)
@@ -610,10 +631,10 @@ class TokenPassingRecovery(object):
                 path_to_task_start = self.search(cbs)
                 #print('path_to_task_start',path_to_task_start)
                 if not path_to_task_start:
-                    print("Solution not found to task start for agent", agent_name, " idling at current position...")
+                    logging.info("Solution not found to task start for agent %s idling at current position...", agent_name)
                         # exit(1)
                 else:
-                    print("Solution found to task start for agent", agent_name, " searching solution to task goal...")
+                    logging.info("Solution found to task start for agent %s searching solution to task goal...", agent_name)
                     #print('path_to_task_start',path_to_task_start)
                     cost1 = env.compute_solution_cost(path_to_task_start)
                     # Use cost - 1 because idle cost is 1
@@ -629,10 +650,10 @@ class TokenPassingRecovery(object):
                     path_to_task_goal = self.search(cbs)
                     #print('path_to_task_goal',path_to_task_goal)
                     if not path_to_task_goal:
-                        print("Solution not found to task goal for agent", agent_name, " idling at current position...")
+                        logging.info("Solution not found to task goal for agent %s idling at current position...", agent_name)
                             # exit(1)
                     else:
-                        print("Solution found to task goal for agent", agent_name, " doing task...")
+                        logging.info("Solution found to task goal for agent %s doing task...", agent_name)
                         #print('path_to_task_goal',path_to_task_goal)
                         cost2 = env.compute_solution_cost(path_to_task_goal)
                         if agent_name not in self.token['agents_to_tasks']:
@@ -653,7 +674,7 @@ class TokenPassingRecovery(object):
                         for el in path_to_task_goal[agent_name]:
                             self.token['agents'][agent_name].append([el['x'], el['y']])
             elif self.check_safe_idle(agent_pos):
-                print('No available tasks for agent', agent_name, ' idling at current position...')
+                logging.info('No available tasks for agent %s idling at current position...', agent_name)
             else:
                 self.go_to_closest_non_task_endpoint(agent_name, agent_pos, all_idle_agents)
 
@@ -661,26 +682,31 @@ class TokenPassingRecovery(object):
         idle_guests = self.get_idle_guests() #prendo gli agenti che oziano
         while len(idle_guests) > 0:
             guest_name = list(idle_guests.keys())[0]
+            # `guest_name` executes now
             all_idle_guests = self.token['guests'].copy()
             all_idle_guests.pop(guest_name)
             guest_pos = idle_guests.pop(guest_name)[0]
+
+            # Collect tasks such that no other path in token ends in task_start or task_goal
             available_tasks = {}
             for task_name, task in self.token['tasks_guest'].items():
-                if tuple(task[0]) not in self.token['path_ends'].difference({tuple(guest_pos)}) and tuple(
-                        task[1]) not in self.token['path_ends'].difference({tuple(guest_pos)}) \
-                        and tuple(task[0]) not in self.get_guests_to_tasks_goals() and tuple(
-                    task[1]) not in self.get_guests_to_tasks_goals():
+                task_start, task_goal = tuple(task[0]), tuple(task[1])
+                if task_start not in self.token['path_ends'].difference({tuple(guest_pos)}) \
+                        and task_goal not in self.token['path_ends'].difference({tuple(guest_pos)}) \
+                        and task_start not in self.get_guests_to_tasks_goals() \
+                        and task_goal not in self.get_guests_to_tasks_goals():
                     available_tasks[task_name] = task
+
             if len(available_tasks) > 0 or guest_name in self.token['guests_to_tasks']:
-                if guest_name in self.token['guests_to_tasks']:
-                    closest_task_name = self.token['guests_to_tasks'][guest_name]['task_name']
-                    closest_task = [self.token['guests_to_tasks'][guest_name]['start'],
-                    self.token['guests_to_tasks'][guest_name]['goal']]
-                else:
+                if guest_name not in self.token['guests_to_tasks']:
                     closest_task_name = self.get_closest_task_name(available_tasks, guest_pos)
                     closest_task = available_tasks[closest_task_name]
+                else:
+                    closest_task_name = self.token['guests_to_tasks'][guest_name]['task_name']
+                    closest_task = [self.token['guests_to_tasks'][guest_name]['start'],
+                            self.token['guests_to_tasks'][guest_name]['goal']]
                 self.token['assigned_tasks_times_guest'][closest_task_name] = self.simulation.get_time()
-                print('task_assegnato', closest_task)
+                logging.info('task_assegnato %s', str(closest_task))
                 moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'], 0)
                 idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
                 guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_task[0]}
@@ -690,10 +716,10 @@ class TokenPassingRecovery(object):
                 path_to_task_start = self.search(cbs)
                 #print('path_to_task_start',path_to_task_start)
                 if not path_to_task_start:
-                    print("Solution not found to task start for guest", guest_name, " idling at current position...")
+                    logging.info("Solution not found to task start for guest %s idling at current position...", guest_name)
                         # exit(1)
                 else:
-                    print("Solution found to task start for guest", guest_name, " searching solution to task goal...")
+                    logging.info("Solution found to task start for guest %s searching solution to task goal...", guest_name)
                     #print('path_to_task_start',path_to_task_start)
                     cost1 = env.compute_solution_cost(path_to_task_start)
                     # Use cost - 1 because idle cost is 1
@@ -707,10 +733,10 @@ class TokenPassingRecovery(object):
                     path_to_task_goal = self.search(cbs)
                     #print('path_to_task_goal',path_to_task_goal)
                     if not path_to_task_goal:
-                        print("Solution not found to task goal for guest", guest_name, " idling at current position...")
+                        logging.info("Solution not found to task goal for guest %s idling at current position...", guest_name)
                             # exit(1)
                     else:
-                        print("Solution found to task goal for guest", guest_name, " doing task...")
+                        logging.info("Solution found to task goal for guest %s doing task...", guest_name)
                         #print('path_to_task_goal',path_to_task_goal)
                         cost2 = env.compute_solution_cost(path_to_task_goal)
                         if guest_name not in self.token['guests_to_tasks']:
@@ -731,7 +757,7 @@ class TokenPassingRecovery(object):
                         for el in path_to_task_goal[guest_name]:
                             self.token['guests'][guest_name].append([el['x'], el['y']])
             elif self.check_safe_idle(guest_pos):
-                print('No available tasks for guest', guest_name, ' idling at current position...')
+                logging.info('No available tasks for guest %s idling at current position...', guest_name)
             else:
                 self.go_to_closest_non_task_endpoint(guest_name, guest_pos, all_idle_guests)
             

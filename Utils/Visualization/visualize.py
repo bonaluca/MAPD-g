@@ -206,16 +206,29 @@ class Animation:
 
         # Check drive-drive collisions agents
         agents_array = [agent for _, agent in self.agents.items()]
-        for i in range(0, len(agents_array)):
-            for j in range(i + 1, len(agents_array)):
-                d1 = agents_array[i]
-                d2 = agents_array[j]
+        for j in range(0, len(agents_array)):
+            for k in range(j + 1, len(agents_array)):
+                d1 = agents_array[j]
+                d2 = agents_array[k]
                 pos1 = np.array(d1.center)
                 pos2 = np.array(d2.center)
                 if np.linalg.norm(pos1 - pos2) < 0.7:
                     d1.set_facecolor('red')
                     d2.set_facecolor('red')
-                    print("COLLISION! (agent-agent) ({}, {})".format(i, j))
+                    print("COLLISION! (agent-agent) ({}, {})".format(j, k))
+
+        # Check drive-drive collisions guests
+        guests_array = [guest for _, guest in self.guests.items()]
+        for j in range(0, len(guests_array)):
+            for k in range(j + 1, len(guests_array)):
+                d1 = guests_array[j]
+                d2 = guests_array[k]
+                pos1 = np.array(d1.center)
+                pos2 = np.array(d2.center)
+                if np.linalg.norm(pos1 - pos2) < 0.7:
+                    d1.set_facecolor('blue')
+                    d2.set_facecolor('blue')
+                    print("COLLISION! (guest-guest) ({}, {})".format(j, k))
 
         # Check drive-drive collisions guests
         guests_array = [guest for _, guest in self.guests.items()]
@@ -265,7 +278,9 @@ if __name__ == "__main__":
         with open(os.path.join(RoothPath.get_root(), 'config.json'), 'r') as json_file:
             config = json.load(json_file)
         args.map = os.path.join(RoothPath.get_root(), os.path.join(config['input_path'], str(args.map_name) + config['visual_postfix'],))
-        args.schedule = os.path.join(RoothPath.get_root(), str(args.alpha)+'-'+str(args.map_name))
+
+    if args.schedule is None:
+        args.schedule = os.path.join(RoothPath.get_root(), 'output', str(args.alpha)+'-'+str(args.map_name))
 
     with open(args.map) as map_file:
         map = yaml.load(map_file, Loader=yaml.FullLoader)
@@ -273,7 +288,7 @@ if __name__ == "__main__":
     with open(args.schedule) as states_file:
         schedule = yaml.load(states_file, Loader=yaml.FullLoader)
 
-    animation = Animation(map, schedule, slow_factor=args.slow_factor,alpha=args.alpha)
+    animation = Animation(map, schedule, slow_factor=args.slow_factor, alpha=args.alpha)
 
     #animation.save('TP_k=1_collision.mp4', 1)
 

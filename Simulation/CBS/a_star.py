@@ -6,6 +6,7 @@ author: Giacomo Lodigiani (@Lodz97)
 import heapq
 from itertools import count
 import networkx as nx
+import logging
 from collections import deque
 from heapq import heappush, heappop
 from itertools import count
@@ -118,9 +119,9 @@ class AStar:
                 break
             if v[1:3] == target:
                 break
-            neighbor_list_tuple = [(i.time,i.location.x, i.location.y) for i in neighbor_list]
-            for u in neighbor_list_tuple:
-                cost = G[v[1:3]][u[1:3]][0]["weight"]
+            neighbor_list_tuple = [((i.time,i.location.x, i.location.y), cost) for (i, cost) in neighbor_list]
+            for u, cost in neighbor_list_tuple:
+                #cost = G[v[1:3]][u[1:3]][0]["weight"]  # @bonaluca
                 #print('siamo in',v,'e il costo di',u,'è',cost)
                 if cost is None:
                     continue
@@ -131,7 +132,7 @@ class AStar:
                 if u in dist:
                     u_dist = dist[u]
                     if vu_dist < u_dist:
-                        print("Contradictory paths found:", "negative weights?")
+                        logging.error("Contradictory paths found: negative weights?")
                         raise ValueError("Contradictory paths found:", "negative weights?")
                     elif pred is not None and vu_dist == u_dist:
                         pred[u].append(v)
@@ -180,7 +181,7 @@ class AStar:
             path_def = self.dijkstra_path(graph,source=source,target=target)
             return path_def
         except:
-            print('Path not found')
+            logging.info('Path not found')
             return False
 
 

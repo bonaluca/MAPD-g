@@ -3,6 +3,7 @@ import yaml
 import random
 import json
 import os
+import logging
 from Simulation.TP_with_recovery import TokenPassingRecovery
 import RoothPath
 from Simulation.simulation_new_recovery import SimulationNewRecovery
@@ -26,6 +27,9 @@ if __name__ == '__main__':
     parser.add_argument('-not_rand', help='Use if input has fixed tasks', action='store_true')
     parser.add_argument('-alpha', help='Parameter for balance between distance and occupancy', default=None, type=float)
     parser.add_argument('-map_name', help='Name of map chosen', default=None, type=str)
+    parser.add_argument('-obs_time', help='Observation time of guests agents', default=300, type=int)
+    parser.add_argument('-d', help='Output directory', default='output')
+    parser.add_argument('-log', help='Log level of the application', default='WARN', type=str)
 
     args = parser.parse_args()
 
@@ -34,10 +38,19 @@ if __name__ == '__main__':
     if args.p is None:
         args.p = 1
 
+    # Configure logging
+    log_num_level = getattr(logging, args.log.upper(), logging.WARN)
+    logging.basicConfig(level=log_num_level, format='[%(levelname)s]: %(message)s')
+
     with open(os.path.join(RoothPath.get_root(), 'config.json'), 'r') as json_file:
         config = json.load(json_file)
     args.param = os.path.join(RoothPath.get_root(), os.path.join(config['input_path'], str(args.map_name)))
-    args.output = os.path.join(RoothPath.get_root(), str(args.alpha)+'-'+str(args.map_name))
+
+    args.output = os.path.join(RoothPath.get_root(), args.d)
+    if not os.path.exists(args.output):
+        os.mkdir(args.output)
+    args.output = os.path.join(args.output, str(args.alpha)+'-'+str(args.map_name))
+
 
     # Read from input file
     with open(args.param, 'r') as param_file:
@@ -66,7 +79,7 @@ if __name__ == '__main__':
     # Simulate
     simulation = SimulationNewRecovery(tasks, tasks_guest, agents, guests, alpha=args.alpha)
     a_star_max_iter = 4000
-    observation_time=300
+    observation_time=args.obs_time
     tp = TokenPassingRecovery(agents, guests, dimensions, obstacles_agents, obstacles_guests, non_task_endpoints, non_task_endpoints_guests, simulation,
                               a_star_max_iter=args.a_star_max_iter, k=args.k, pd=args.pd, p_max=args.p, p_iter=args.p_iter,
                               new_recovery=True)
