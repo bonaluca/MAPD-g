@@ -35,6 +35,9 @@ if __name__ == '__main__':
     parser.add_argument('-smoothing', help='Apply smoothing to the transition matrix', action='store_true')
     parser.add_argument('-d', help='Output directory', default='output')
     parser.add_argument('-log', help='Log level of the application', default='WARN', type=str)
+    parser.add_argument('-realistic', help='Online model fit', action='store_true')
+    parser.add_argument('-fit_every', help='Number of timesteps to wait between model updates', dest='fit_interval',
+                        default=50, type=int)
     parser.add_argument('-load', help='Load model parameters from file', dest='load_filename', metavar='FILE', type=str)
     parser.add_argument('-save', help='Load model parameters from file', dest='save_filename', metavar='FILE', type=str)
 
@@ -45,10 +48,15 @@ if __name__ == '__main__':
     if args.p is None:
         args.p = 1
 
+    # Ignore observation time if model is realistic
+    if args.realistic:
+        args.obs_time = 0
+
     # Configure logging
     log_num_level = getattr(logging, args.log.upper(), logging.WARN)
     logging.basicConfig(level=log_num_level, format='[%(levelname)s]: %(message)s')
 
+    # Output filename
     args.output = os.path.join(RoothPath.get_root(), args.d)
     if not os.path.exists(args.output):
         os.mkdir(args.output)
@@ -118,12 +126,24 @@ if __name__ == '__main__':
     tp = TokenPassingRecovery(agents, guests, dimensions, obstacles_agents, obstacles_guests, non_task_endpoints, non_task_endpoints_guests, simulation,
                               a_star_max_iter=args.a_star_max_iter, k=args.k, pd=args.pd, p_max=args.p, p_iter=args.p_iter,
                               new_recovery=True, strict_idle=args.strict_idle)
-    
-    
+
+    last_fit = -1
+    if observation_time == 0:
+        # Prevent NotFittedError
+        occupancy_model.fit({})
+
     while (tp.get_completed_tasks() != len(tasks) or tp.get_completed_tasks_guest() != len(tasks_guest)):
-        # TODO @bonaluca: never true if observation_time = 0
+        # Offline model fit
         if simulation.time == observation_time - 1:
-            occupancy_model.fit(simulation.actual_paths)
+            occupancy_model.fit(simulation.actual_paths, set_initial_belief=True)
+            last_fit = simulation.time
+
+        # Online realistic model fit
+        if args.realistic and simulation.time % args.fit_interval == 0:
+            data = simulation.get_agent_sightings(from_time=last_fit + 1 - args.order)
+            occupancy_model.fit(data)
+            last_fit = simulation.time + 1
+
         simulation.time_forward(tp, dimensions, non_task_endpoints_guests, obstacles, obstacles_agents, obstacles_guests, a_star_max_iter)
 
         if simulation.deadlock == True:
@@ -141,6 +161,18 @@ if __name__ == '__main__':
             occupancy_model.fit(data)
         occupancy_model.save(args.save_filename)
 
+    # Computation of the number of conflicts occurred
+    schedule = {**simulation.actual_paths, **simulation.actual_paths_guests}
+
+    schedule_guests = simulation.actual_paths_guests,
+    schedule_agents = simulation.actual_paths,
+
+    conflicts = []
+    for agent in schedule_agents[0]:
+        for guest in schedule_guests[0]:
+            conflicts = conflicts + [x for x in schedule_agents[0][agent] if x in schedule_guests[0][guest]]
+    n_conflicts = len(conflicts)
+
     if simulation.deadlock == False:
 
         # Computation of the whole cost
@@ -150,20 +182,6 @@ if __name__ == '__main__':
         cost_guests = 0
         for path_guest in simulation.actual_paths_guests.values():
             cost_guests = cost_guests + len(path_guest)
-
-        # Computation of the number of conflicts occurred
-        schedule = {**simulation.actual_paths, **simulation.actual_paths_guests}
-        # schedule è una tupla che contiene un dizionario; ogni dizionario contiene una lista di dizionari
-
-        schedule_guests = simulation.actual_paths_guests,
-        schedule_agents = simulation.actual_paths,
-
-        conflicts = []
-        for agent in schedule_agents[0]:
-            for guest in schedule_guests[0]:
-                conflicts = conflicts + [x for x in schedule_agents[0][agent] if x in schedule_guests[0][guest]]
-        n_conflicts = len(conflicts)
-
 
         timespan = 0
         for task in tasks_guest:
@@ -209,24 +227,14 @@ if __name__ == '__main__':
                 'n_replanning_guest': simulation.get_n_replanning_guest(),
                 'count_moves_guests': counter_moves_guests,
                 'count_moves_agents': counter_moves,
-                'n_replans': tp.get_n_replans()}
+                'n_replans': tp.get_n_replans(),
+                'sample_count': occupancy_model.get_obs_counts()}
         with open(args.output, 'w') as output_yaml:
             yaml.safe_dump(output, output_yaml)
 
     
     if simulation.deadlock == True:
         args.output = os.path.join(RoothPath.get_root(), 'output', str(args.alpha)+'-DL-'+str(args.map_name))
-
-        schedule = {**simulation.actual_paths, **simulation.actual_paths_guests}
-
-        schedule_guests = simulation.actual_paths_guests,
-        schedule_agents = simulation.actual_paths,
-
-        conflicts = []
-        for agent in schedule_agents[0]:
-            for guest in schedule_guests[0]:
-                conflicts = conflicts + [x for x in schedule_agents[0][agent] if x in schedule_guests[0][guest]]
-        n_conflicts = len(conflicts)
 
         output = {'schedule': schedule,
         #'cost_residentials': cost,
@@ -247,7 +255,8 @@ if __name__ == '__main__':
         'n_replanning_guest': simulation.get_n_replanning_guest(),
         #'count_moves_guests': counter_moves_guests,
         #'count_moves_agents': counter_moves,
-        #'n_replans': tp.get_n_replans()
+        #'n_replans': tp.get_n_replans(),
+        'sample_count': occupancy_model.get_obs_counts(),
         }
         with open(args.output, 'w') as output_yaml:
             yaml.safe_dump(output, output_yaml)
