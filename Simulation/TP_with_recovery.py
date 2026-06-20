@@ -178,6 +178,10 @@ class TokenPassingRecovery(object):
 
     def check_safe_idle(self, agent_pos):
         """Check if the agent is on a cell that is the pick-up / delivery of a task."""
+
+        if self.strict_idle and tuple(agent_pos) not in self.non_task_endpoints:
+            return False
+
         for task in self.token['tasks'].items():
             if tuple(task[0]) == tuple(agent_pos) or tuple(task[1]) == tuple(agent_pos):
                 return False
@@ -329,6 +333,12 @@ class TokenPassingRecovery(object):
         closest_non_task_endpoint = self.get_closest_non_task_endpoint(agent_pos)
         moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], 0)
         idle_obstacles_agents = self.get_idle_obstacles(all_idle_agents.values(), 0)
+        if self.strict_idle:
+            # Avoid non-task endpoints unless it's the goal
+            idle_obstacles_agents |= set(self.non_task_endpoints) - {tuple(agent_pos), closest_non_task_endpoint}
+        else:
+            # Avoid delivery endpoints unless it's the goal
+            idle_obstacles_agents |= set(self.simulation.delivery_agents) - {tuple(agent_pos), closest_non_task_endpoint}
         agent = {'name': agent_name, 'start': agent_pos, 'goal': closest_non_task_endpoint}
         env = Environment(self.dimensions, [agent], self.obstacles_agents | idle_obstacles_agents, moving_obstacles_agents,
                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_agents())
@@ -512,6 +522,13 @@ class TokenPassingRecovery(object):
         moving_obstacles_guests = self.get_moving_obstacles(other_guests_path, time_start)
         idle_obstacles_guests = self.get_idle_obstacles(other_guests_path.values(), time_start)
 
+        if self.strict_idle:
+            # Avoid non-task endpoints unless it's the goal
+            idle_obstacles_guests |= set(self.non_task_endpoints_guests) - {tuple(start), tuple(goal)}
+        else:
+            # Avoid delivery endpoints unless it's the goal
+            idle_obstacles_guests |= set(self.simulation.delivery_guests) - {tuple(start), tuple(goal)}
+
         # Still consider initial position of ignored guests
         if time_start == 0:
             for ignored_guest in ignore_guests:
@@ -559,6 +576,24 @@ class TokenPassingRecovery(object):
         cost = env.compute_solution_cost(path)
         return path, cost
 
+    def update_occupied_non_task_endpoints(self):
+        self.token['occupied_non_task_endpoints'] = dict(filter(
+            lambda item: item[1] is not None,
+            {
+                endpoint: next((
+                    agent['name'] for agent in self.agents
+                    # TODO @bonaluca: is it really occupied when an agent just crosses over?
+                    if endpoint == self.current_pos_agents(agent['name'])
+                    or (
+                        agent['name'] in self.token['agents_to_tasks'] and
+                        endpoint == tuple(self.token['agents_to_tasks'][agent['name']]['goal'])
+                    )
+                    or endpoint == tuple(self.token['agents'][agent['name']][-1])
+                ), None)
+                for endpoint in self.non_task_endpoints
+            }.items()
+        ))
+
     def update_occupied_non_task_endpoints_guests(self):
         self.token['occupied_non_task_endpoints_guests'] = dict(filter(
             lambda item: item[1] is not None,
@@ -578,6 +613,7 @@ class TokenPassingRecovery(object):
         ))
 
     def time_forward(self):
+        self.update_occupied_non_task_endpoints()
         self.update_occupied_non_task_endpoints_guests()
 
         # Update completed tasks for the agents
@@ -701,6 +737,12 @@ class TokenPassingRecovery(object):
                 logging.info('task_assegnato agente %s', str(closest_task))
                 moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], 0)
                 idle_obstacles_agents = self.get_idle_obstacles(all_idle_agents.values(), 0)
+                if self.strict_idle:
+                    # Avoid non-task endpoints unless it's the goal
+                    idle_obstacles_agents |= set(self.non_task_endpoints) - {tuple(agent_pos), tuple(closest_task[0])}
+                else:
+                    # Avoid delivery endpoints unless it's the goal
+                    idle_obstacles_agents |= set(self.simulation.delivery_agents) - {tuple(agent_pos), tuple(closest_task[0])}
                 #print('moving_obstacles_agents PER START1',moving_obstacles_agents)
                 #print('TOKEN',self.token['agents'])
                 agent = {'name': agent_name, 'start': agent_pos, 'goal': closest_task[0]}
@@ -721,6 +763,12 @@ class TokenPassingRecovery(object):
                     moving_obstacles_agents = self.get_moving_obstacles(self.token['agents'], time_start)
                     idle_obstacles_agents = self.get_idle_obstacles(all_idle_agents.values(),
                                                                         time_start)
+                    if self.strict_idle:
+                        # Avoid non-task endpoints unless it's the goal
+                        idle_obstacles_agents |= set(self.non_task_endpoints) - {tuple(closest_task[0]), tuple(closest_task[1])}
+                    else:
+                        # Avoid delivery endpoints unless it's the goal
+                        idle_obstacles_agents |= set(self.simulation.delivery_agents) - {tuple(closest_task[0]), tuple(closest_task[1])}
                     #print('moving_obstacles_agents PER GOAL1',moving_obstacles_agents)
                     #print('TOKEN',self.token['agents'])
                     agent = {'name': agent_name, 'start': closest_task[0], 'goal': closest_task[1]}
@@ -790,6 +838,12 @@ class TokenPassingRecovery(object):
                 logging.info('task_assegnato %s', str(closest_task))
                 moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], 0)
                 idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(), 0)
+                if self.strict_idle:
+                    # Avoid non-task endpoints unless it's the goal
+                    idle_obstacles_guests |= set(self.non_task_endpoints_guests) - {tuple(guest_pos), tuple(closest_task[0])}
+                else:
+                    # Avoid delivery endpoints unless it's the goal
+                    idle_obstacles_guests |= set(self.simulation.delivery_guests) - {tuple(guest_pos), tuple(closest_task[0])}
                 guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_task[0]}
                 env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
                                 moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter,
@@ -812,6 +866,12 @@ class TokenPassingRecovery(object):
                     moving_obstacles_guests = self.get_moving_obstacles(self.token['guests'], time_start)
                     idle_obstacles_guests = self.get_idle_obstacles(all_idle_guests.values(),
                                                                         time_start)
+                    if self.strict_idle:
+                        # Avoid non-task endpoints unless it's the goal
+                        idle_obstacles_guests |= set(self.non_task_endpoints_guests) - {tuple(closest_task[0]), tuple(closest_task[1])}
+                    else:
+                        # Avoid delivery endpoints unless it's the goal
+                        idle_obstacles_guests |= set(self.simulation.delivery_guests) - {tuple(closest_task[0]), tuple(closest_task[1])}
                     guest = {'name': guest_name, 'start': closest_task[0], 'goal': closest_task[1]}
                     env = DynamicEnvironment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
                                     moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter, time_start=time_start,
@@ -850,7 +910,7 @@ class TokenPassingRecovery(object):
             elif self.check_safe_idle_guest(guest_pos):
                 logging.info('No available tasks for guest %s idling at current position...', guest_name)
             else:
-                self.go_to_closest_non_task_endpoint_guest(guest_name, guest_pos, all_idle_guests)
+                self.go_to_closest_non_task_endpoint_guest(guest_name, avoid_nearby_agents=True)
             
         #GUESTS 
         

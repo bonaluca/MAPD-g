@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('-map_name', help='Name of map chosen', default=None, type=str)
     parser.add_argument('-obs_time', help='Observation time of guests agents', default=300, type=int)
     parser.add_argument('-cache_size', help='Maximum size for the caching of the transition matrix', default='1G')
-    parser.add_argument('-strict_idle', help='Guests can idle only at non-task endpoints', action='store_true')
+    parser.add_argument('-strict_idle', help='Agents can only idle at their non-task endpoints', action='store_true')
     parser.add_argument('-cross_goals', help='Agents can cross guests\' delivery locations', action='store_true')
     parser.add_argument('-weight_function', help='Weight function to combine distance and occupancy',
                         choices=['convex', 'exp'], default='convex')
@@ -133,7 +133,8 @@ if __name__ == '__main__':
 
     # Simulate
     simulation = SimulationNewRecovery(
-        tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests,
+        tasks, tasks_guest, agents, guests,
+        obstacles_agents, obstacles_guests, delivery_agents, delivery_guests,
         dimensions, occupancy_model, alpha=args.alpha, full_sight=args.full_sight,
         forbidden_moves_agents=forbidden_moves_agents,
         weight_function=args.weight_function,

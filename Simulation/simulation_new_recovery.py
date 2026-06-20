@@ -8,13 +8,18 @@ from Simulation.exceptions import NotFittedError, PathNotFoundError
 
 class SimulationNewRecovery(object):
     random.seed(1234)
-    def __init__(self, tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha, full_sight=False, weight_function='convex', forbidden_moves_agents=[], guest_algorithm=None):
+    def __init__(self, tasks, tasks_guest, agents, guests,
+            obstacles_agents, obstacles_guests, delivery_agents, delivery_guests,
+            dimensions, occupancy_model, alpha,
+            full_sight=False, weight_function='convex', forbidden_moves_agents=[], guest_algorithm=None):
         self.tasks = tasks #tasks of the agents
         self.tasks_guest = tasks_guest #tasks of the guests
         self.agents = agents #the agents
         self.guests = guests #the guests
         self.obstacles_agents = obstacles_agents #the obstacles for the agents
         self.obstacles_guests = obstacles_guests #the obstacles for the guests
+        self.delivery_agents = delivery_agents
+        self.delivery_guests = delivery_guests
         self.dimensions = dimensions #the dimensions of the grid
         self.forbidden_moves_agents = forbidden_moves_agents #forbidden moves for agents
         self.guest_algorithm = guest_algorithm or ('astar' if weight_function == 'exp' else 'dijkstra')
