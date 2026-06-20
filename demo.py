@@ -29,13 +29,19 @@ if __name__ == '__main__':
     parser.add_argument('-alpha', help='Parameter for balance between distance and occupancy', default=None, type=float)
     parser.add_argument('-map_name', help='Name of map chosen', default=None, type=str)
     parser.add_argument('-obs_time', help='Observation time of guests agents', default=300, type=int)
+    parser.add_argument('-cache_size', help='Maximum size for the caching of the transition matrix', default='1G')
     parser.add_argument('-strict_idle', help='Guests can idle only at non-task endpoints', action='store_true')
     parser.add_argument('-cross_goals', help='Agents can cross guests\' delivery locations', action='store_true')
+    parser.add_argument('-weight_function', help='Weight function to combine distance and occupancy',
+                        choices=['convex', 'exp'], default='convex')
     parser.add_argument('-order', help='Order of the model', default=0, type=int, choices=[0, 1, 2, 3])
     parser.add_argument('-smoothing', help='Apply smoothing to the transition matrix', action='store_true')
+    parser.add_argument('-init_policy', help='The initialization policy for the transition matrix',
+                        choices=['random', 'selfloop', 'heading'], default='random')
     parser.add_argument('-d', help='Output directory', default='output')
     parser.add_argument('-log', help='Log level of the application', default='WARN', type=str)
     parser.add_argument('-realistic', help='Online model fit', action='store_true')
+    parser.add_argument('-full_sight', help='Guests know where agents are after each step', action='store_true')
     parser.add_argument('-fit_every', help='Number of timesteps to wait between model updates', dest='fit_interval',
                         default=50, type=int)
     parser.add_argument('-load', help='Load model parameters from file', dest='load_filename', metavar='FILE', type=str)
@@ -112,7 +118,7 @@ if __name__ == '__main__':
     else:
         occupancy_model = MarkovianOccupancyModel(
             *dimensions, agents, obstacles=obstacles_agents,
-            order=args.order, cache_size="1G", backoff=args.smoothing
+            order=args.order, cache_size=args.cache_size, backoff=args.smoothing
         )
 
     # Load model from file
@@ -120,12 +126,19 @@ if __name__ == '__main__':
         occupancy_model.load(args.load_filename)
 
     # Simulate
-    simulation = SimulationNewRecovery(tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha=args.alpha)
+    simulation = SimulationNewRecovery(
+        tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests,
+        dimensions, occupancy_model, alpha=args.alpha, full_sight=args.full_sight,
+        weight_function=args.weight_function
+    )
     a_star_max_iter = 4000
     observation_time=args.obs_time
-    tp = TokenPassingRecovery(agents, guests, dimensions, obstacles_agents, obstacles_guests, non_task_endpoints, non_task_endpoints_guests, simulation,
-                              a_star_max_iter=args.a_star_max_iter, k=args.k, pd=args.pd, p_max=args.p, p_iter=args.p_iter,
-                              new_recovery=True, strict_idle=args.strict_idle)
+    tp = TokenPassingRecovery(
+        agents, guests, dimensions, obstacles_agents, obstacles_guests,
+        non_task_endpoints, non_task_endpoints_guests, simulation,
+        a_star_max_iter=args.a_star_max_iter, k=args.k, pd=args.pd,
+        p_max=args.p, p_iter=args.p_iter, new_recovery=True, strict_idle=args.strict_idle
+    )
 
     last_fit = -1
     if observation_time == 0:
@@ -219,7 +232,10 @@ if __name__ == '__main__':
                 'completed_tasks_times': tp.get_completed_tasks_times(),
                 'assigned_tasks_times_guest': tp.get_assigned_tasks_times_guest(),
                 'completed_tasks_times_guest': tp.get_completed_tasks_times_guest(),
+                'predicted_tasks_times_guest': tp.get_predicted_tasks_times_guest(),
+                'agent_sightings': simulation.get_agent_sightings(),
                 'conflicts': conflicts,
+                'replan_times': simulation.get_replanning_times(),
                 'prob_mat': occupancy_model.get_prob_matrix_90deg(),
                 'n_conflicts': n_conflicts,
                 'n_timespan': timespan,
@@ -244,7 +260,10 @@ if __name__ == '__main__':
         'completed_tasks_times': tp.get_completed_tasks_times(),
         'assigned_tasks_times_guest': tp.get_assigned_tasks_times_guest(),
         'completed_tasks_times_guest': tp.get_completed_tasks_times_guest(),
+        'predicted_tasks_times_guest': tp.get_predicted_tasks_times_guest(),
+        'agent_sightings': simulation.get_agent_sightings(),
         'conflicts': conflicts,
+        'replan_times': simulation.get_replanning_times(),
         'guest_involved': simulation.guest_presence,
         'deadlock_task': simulation.deadlock_task,
         'deadlock_guest': simulation.deadlock_guest,

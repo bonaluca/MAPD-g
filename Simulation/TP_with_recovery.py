@@ -79,6 +79,7 @@ class TokenPassingRecovery(object):
         self.token['completed_tasks_times'] = {}
         self.token['completed_tasks_times_guest'] = {}
         self.token['assigned_tasks_times_guest'] = {}
+        self.token['predicted_tasks_times_guest'] = {}
         #initialization of the tasks start times of agents / guests
         for t in self.simulation.get_new_tasks():
             self.token['tasks'][t['task_name']] = [t['start'], t['goal']]
@@ -303,6 +304,9 @@ class TokenPassingRecovery(object):
 
     def get_assigned_tasks_times_guest(self):
         return self.token['assigned_tasks_times_guest']
+
+    def get_predicted_tasks_times_guest(self):
+        return self.token['predicted_tasks_times_guest']
 
     def get_n_replans(self):
         return self.token['n_replans']
@@ -832,6 +836,7 @@ class TokenPassingRecovery(object):
                         self.token['path_ends_guest'].add(tuple([last_step['x'], last_step['y']]))
                         self.token['guests_to_tasks'][guest_name] = {'task_name': closest_task_name, 'start': task[0],
                                                                     'goal': task[1], 'predicted_cost': cost1 + cost2}
+                        self.token['predicted_tasks_times_guest'].update({closest_task_name: cost1 + cost2})
                         self.token['guests'][guest_name] = []
                         for el in path_to_task_start[guest_name]:
                             self.token['guests'][guest_name].append([el['x'], el['y']])

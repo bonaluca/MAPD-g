@@ -8,7 +8,7 @@ from Simulation.exceptions import NotFittedError, PathNotFoundError
 
 class SimulationNewRecovery(object):
     random.seed(1234)
-    def __init__(self, tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha):
+    def __init__(self, tasks, tasks_guest, agents, guests, obstacles_agents, obstacles_guests, dimensions, occupancy_model, alpha, full_sight=False, weight_function='convex'):
         self.tasks = tasks #tasks of the agents
         self.tasks_guest = tasks_guest #tasks of the guests
         self.agents = agents #the agents
@@ -18,6 +18,7 @@ class SimulationNewRecovery(object):
         self.dimensions = dimensions #the dimensions of the grid
         self.occupancy_model = occupancy_model #the occupancy model of the agents
         self.alpha = alpha
+        self.full_sight = full_sight #guests know where agents are after each time step
         self.time = 0 #initialization of the time steps of the algorithm
         self.start_times = [] #it is a list that cointains the starting time of the tasks
         self.start_times_guests = [] #it is a list that cointains the starting time of the tasks of the guests
@@ -27,15 +28,16 @@ class SimulationNewRecovery(object):
         self.guests_moved = set() #it is a set that contains the guests that have been moved
         self.actual_paths = {} #it is a dictionary that keeps track step by step of the actual paths of each agent
         self.actual_paths_guests = {} #it is a dictionary that keeps track step by step of the actual paths of each guest
+        self.replannings = {} #it is a dictionary that tracks the time steps at which a replan occurs for a task
         self.agent_sightings = {} #it is a dictionary that keeps track of the agents that the guests encountered
         self.algo_time = 0 #it keeps track of the time (in seconds) that the tp algorithm employs for each iteration
         self.n_replanning_guest = 0 #it counts the number of times a guest has to change its path in order to avoid an agent
         self.to_replan_from_start = []
         self.to_replan_from_goal = []
         self.guest_presence = False
-        self.initialize_simulation()
+        self.initialize_simulation(weight_function=weight_function)
 
-    def initialize_simulation(self):
+    def initialize_simulation(self, weight_function='convex'):
         self.deadlock = False
         for t in self.tasks: #we add in start_times the starting time of each taks of the agents
             self.start_times.append(t['start_time'])
@@ -90,18 +92,21 @@ class SimulationNewRecovery(object):
         logging.debug(self.G_agents)
         logging.debug('Graph diameter: %s' % self.diam_g)
 
-#        # Weight function that balances distance and probability of occupancy
-#        self.weight_function = lambda dist, prob_occ: \
-#            1 / max((1 - prob_occ) ** (self.alpha), 5e-4)
-
-        # Weight function that balances distance and probability of occupancy
-        if self.alpha != 1:
+        if weight_function == 'convex':
+            # Weight function that balances distance and probability of occupancy
+            if self.alpha != 1:
+                self.weight_function = lambda dist, prob_occ: \
+                    ((1 - self.alpha) * dist) / self.diam_g + self.alpha * prob_occ
+            else:
+                # Prevent zero cost edges
+                self.weight_function = lambda dist, prob_occ: \
+                    max(prob_occ, 5e-4)
+        elif weight_function == 'exp':
+            # Weight function that balances distance and probability of occupancy
             self.weight_function = lambda dist, prob_occ: \
-                ((1 - self.alpha) * dist) / self.diam_g + self.alpha * prob_occ
+                1 / max((1 - prob_occ) ** (self.alpha), 5e-4)
         else:
-            # Prevent zero cost edges
-            self.weight_function = lambda dist, prob_occ: \
-                max(prob_occ, 5e-4)
+            raise ValueError(f'Weight function {weight_function} not recognised.')
 
 
     # time_forward is the method in which the agents are effectly moved and the time is shifted one step ahead
@@ -162,11 +167,13 @@ class SimulationNewRecovery(object):
                 #if the next move of the agent is the next move of the guest
                 if algorithm.next_pos_agents(agent) == (x_new, y_new):
                     logging.info('VERTEX-CONFLICT with a moving guest (%d, %d) %s', x_new, y_new, algorithm.next_pos_agents(agent))
+                    conflicting_agent = agent
 
                 # case in which the agent and the guest exchange their positions
                 if algorithm.current_pos_agents(agent) == (x_new, y_new) and \
                     algorithm.next_pos_agents(agent) == algorithm.current_pos_guests(guest):
                     logging.info('EDGE-CONFLICT with a moving guest')
+                    conflicting_agent = agent
 
             # possible_moves denotes all available moves, excluding those
             # that are conflicting with agents' plans
@@ -182,6 +189,7 @@ class SimulationNewRecovery(object):
                 neighbors(algorithm.current_pos_guests(guest))
             ))
 
+            # Empty set of possible moves means deadlock
             if not possible_moves:
                 self.deadlock = True
                 self.deadlock_task = algorithm.get_token()['guests_to_tasks'][guest] \
@@ -191,7 +199,8 @@ class SimulationNewRecovery(object):
                 logging.error(self.deadlock_task)
                 return
 
-            # Filter out conflicting guest moves
+            # accepted_moves denotes all the possible moves, excluding those
+            # that are conflicting with other guests' plans
             accepted_moves = list(filter(lambda move:
                 move not in [ # Vertex conflicting moves
                     algorithm.next_pos_guests(other_guest)
@@ -205,24 +214,21 @@ class SimulationNewRecovery(object):
                 ], possible_moves
             ))
 
+            # No conflict if next move of the guest is an accepted_move
             if (x_new, y_new) in accepted_moves:
                 continue
 
-            if accepted_moves:
-#                # TODO @bonaluca: why? can't we just let the low level planner do the whole job?
-#                if algorithm.get_token()['guests_to_tasks'][guest]['start'] in algorithm.get_token()['guests'][guest]:
-#                    move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][guest]['start'])
-#                else:
-#                    move = self.get_closest_move(accepted_moves, algorithm.get_token()['guests_to_tasks'][guest]['goal'])
-                self.n_replanning_guest += 1
-#                x_new, y_new = move
+            # Guest conflicts with an agent
+            conflicting_task = algorithm.get_token()['guests_to_tasks'].get(
+                guest, {'task_name': 'safe_idle'}
+            )['task_name']
 
-                #try:
-                #    guests_to_replan = [guest]
-                #    first_moves = {guest: (x_new, y_new)}
-                #    self.replan2(algorithm, guests_to_replan, first_moves)
-                #except PathNotFoundError:
-                #    break
+            task_conflicts = self.replannings.setdefault(conflicting_task, [])
+            task_conflicts.append({'time': self.time, 'agent': conflicting_agent})
+
+            # Guest conflicts with an agent, but an alternative move is available
+            if accepted_moves:
+                self.n_replanning_guest += 1
 
                 try:
 #                    self.replan(algorithm, guest, first_move=(x_new, y_new))
@@ -237,7 +243,7 @@ class SimulationNewRecovery(object):
                             if guest in algorithm.get_token()['guests_to_tasks'] else None
                         return
 
-            # Possible deadlock that may be recoverable, since it involves only guests
+            # Guest conflicts with an agent, but we need replanning for multiple guests
             logging.info('Possible deadlock for %s at (%d, %d) involving other guests' % (guest, x_new, y_new))
 
             guests_to_replan = [guest]
@@ -274,11 +280,13 @@ class SimulationNewRecovery(object):
                 #if the next move of the agent is the next move of the guest
                 if algorithm.next_pos_agents(agent) == (x_new, y_new):
                     logging.info('VERTEX-CONFLICT with an idle guest (%d, %d) %s' % (x_new, y_new, str(algorithm.next_pos_agents(agent))))
+                    conflicting_agent = agent
                 # case in which the agent and the guest exchange their positions
                 # TODO @bonaluca: this never happens
                 if algorithm.current_pos_agents(agent) == (x_new, y_new) and \
                     algorithm.next_pos_agents(agent) == algorithm.current_pos_guests(guest):
                     logging.info('EDGE-CONFLICT with an idle guest')
+                    conflicting_agent = agent
 
             # possible_moves denotes all available moves, excluding those
             # that are conflicting with agents' plans
@@ -322,6 +330,14 @@ class SimulationNewRecovery(object):
                 self.deadlock_task = None
                 logging.error('DEADLOCK ERROR! (%d, %d)', x_new, y_new)
                 return
+
+            # Guest conflicts with an agent
+            conflicting_task = algorithm.get_token()['guests_to_tasks'].get(
+                guest, {'task_name': 'safe_idle'}
+            )['task_name']
+
+            task_conflicts = self.replannings.setdefault(conflicting_task, [])
+            task_conflicts.append({'time': self.time, 'agent': conflicting_agent})
 
             # if the presence of conflicts is true, we change the next move of the guest (choosing a random one) and replan
             move = random.choice(accepted_moves)
@@ -380,6 +396,13 @@ class SimulationNewRecovery(object):
             sightings.append({
                 't': self.time + 1, 'x': pos[0], 'y': pos[1]
             })
+
+        if self.full_sight:
+            # Guests always know the position of the agents after each time step
+            seen_agents = {
+                agent_name: algorithm.current_pos_agents(agent_name)
+                for agent_name in agents
+            }
 
         try:
             self.occupancy_model.time_forward(free_locations=free_locations, seen_agents=seen_agents)
@@ -651,6 +674,12 @@ class SimulationNewRecovery(object):
 
     def get_n_replanning_guest(self):
         return self.n_replanning_guest
+
+    def get_replanning_times(self):
+        return {
+            task: list(map(lambda x: x['time'], conflicts))
+            for task, conflicts in self.replannings.items()
+        }
 
     def get_graph_agents(self):
         return self.G_agents
