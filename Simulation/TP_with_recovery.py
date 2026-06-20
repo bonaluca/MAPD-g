@@ -1,23 +1,26 @@
 """
-Python implementation of Token Passing algorithms to solve MAPD problems with delays
+Python implementation of Token Passing algorithms to solve MAPD problems
 author: Giacomo Lodigiani (@Lodz97)
 """
 from math import fabs
 import random
 from Simulation.CBS.cbs import CBS, Environment
-from Simulation.markov_chains import MarkovChainsMaker
 from collections import defaultdict
 
-
 class TokenPassingRecovery(object):
-    def __init__(self, agents, dimesions, obstacles, non_task_endpoints, simulation, a_star_max_iter=4000, k=0,
-                 replan_every_k_delays=False, pd=None, p_max=1, p_iter=1, new_recovery=False):
+    random.seed(1234)
+    def __init__(self, agents, guests, dimesions, obstacles_agents, obstacles_guests, 
+                non_task_endpoints, non_task_endpoints_guests, simulation, a_star_max_iter=4000, 
+                k=0,pd=None, p_max=1, p_iter=1, new_recovery=False):
         self.agents = agents
+        self.guests = guests
         self.dimensions = dimesions
-        self.obstacles = set(obstacles)
+        self.obstacles_agents = set(obstacles_agents)
+        self.obstacles_guests = set(obstacles_guests)
         self.non_task_endpoints = non_task_endpoints
-        if len(agents) > len(non_task_endpoints):
-            print('There are more agents than non task endpoints, instance is not well-formed.')
+        self.non_task_endpoints_guests = non_task_endpoints_guests
+        if len(agents) > len(non_task_endpoints) or len(guests) > len(non_task_endpoints_guests):
+            print('There are more agents and guests than non task endpoints, instance is not well-formed.')
             exit(1)
         # TODO: Check all properties for well-formedness
         self.token = {}
@@ -25,6 +28,9 @@ class TokenPassingRecovery(object):
         self.a_star_max_iter = a_star_max_iter
         self.k = k
         self.p_max = p_max
+        if self.p_max != 1:
+            print('p_max must be 1.')
+            exit(-1)
         if self.k != 0 and self.p_max != 1:
             print('Use of k and p robustness at same time not allowed.')
             exit(-1)
@@ -34,10 +40,6 @@ class TokenPassingRecovery(object):
         if self.k == 0 and not new_recovery:
             print('k = 0 not supported for this recovery type.')
             exit(1)
-        self.replan_every_k_delays = replan_every_k_delays
-        if k == 0 and replan_every_k_delays:
-            print('If k = 0 replan_every_k_delays must be False. Setting to False...')
-            self.replan_every_k_delays = False
         if self.k == 0:
             if (self.p_max < 0 or self.p_max > 1):
                 print('Max conflict probability must be between 0 and 1.')
@@ -47,7 +49,7 @@ class TokenPassingRecovery(object):
                 print('To use p robustness need to set pd.')
                 exit(1)
             if self.pd and (pd < 0 or pd > 1):
-                print('Probability of delay must be between 0 and 1.')
+                print('Probability of must be between 0 and 1.')
                 exit(1)
             self.p_iter = p_iter
             if self.p_iter <= 0:
@@ -61,47 +63,89 @@ class TokenPassingRecovery(object):
         self.init_token()
 
     def init_token(self):
+        #it contains the current planned path for each agent / guest
         self.token['agents'] = {}
+        self.token['guests'] = {}
+        #it contains info about the tasks of agents / guests
         self.token['tasks'] = {}
+        self.token['tasks_guest'] = {}
+        #it contains info about the start times of tasks of agents / guests
         self.token['start_tasks_times'] = {}
+        self.token['start_tasks_times_guest'] = {}
+        #it contains info about the completion times of tasks of agents / guests
         self.token['completed_tasks_times'] = {}
+        self.token['completed_tasks_times_guest'] = {}
+        self.token['assigned_tasks_times_guest'] = {}
+        #initialization of the tasks start times of agents / guests
         for t in self.simulation.get_new_tasks():
             self.token['tasks'][t['task_name']] = [t['start'], t['goal']]
             self.token['start_tasks_times'][t['task_name']] = self.simulation.get_time()
+        for t in self.simulation.get_new_tasks_guest():
+            self.token['tasks_guest'][t['task_name']] = [t['start'], t['goal']]
+            self.token['start_tasks_times_guest'][t['task_name']] = self.simulation.get_time()
+        #it contains information about the assignment of tasks to agents / guests
         self.token['agents_to_tasks'] = {}
+        self.token['guests_to_tasks'] = {}
+        #number of tasks completed by agents / guests
         self.token['completed_tasks'] = 0
+        self.token['completed_tasks_guest'] = 0
+        #number of times a total replan is necessary
         self.token['n_replans'] = 0
+        #it contains information about the ends (estremità) of each path: initial point, pick-up, delivery (?)
         self.token['path_ends'] = set()
+        self.token['path_ends_guest'] = set()
+        #it contains the endpoints that are occupied by agents / guests
         self.token['occupied_non_task_endpoints'] = set()
-        self.token['delayed_agents'] = []
-        self.token['delayed_agents_to_reach_task_start'] = []
+        self.token['occupied_non_task_endpoints_guests'] = set()
+        #information necessary to perform the total replan (recovery)
         self.token['agent_at_end_path'] = []
         self.token['agent_at_end_path_pos'] = []
         self.token['agents_in_recovery_trial'] = []
+        self.token['guest_at_end_path'] = []
+        self.token['guest_at_end_path_pos'] = []
+        self.token['guests_in_recovery_trial'] = []
+        #initialization of path_ends with the starting positions of agents / guests
         for a in self.agents:
             self.token['agents'][a['name']] = [a['start']]
             self.token['path_ends'].add(tuple(a['start']))
+        for a in self.guests:
+            self.token['guests'][a['name']] = [a['start']]
+            self.token['path_ends_guest'].add(tuple(a['start']))
         self.token['prob_exceeded'] = False
+        #number of times each agent / guest is in a deadlock (0 by default)
         self.token['deadlock_count_per_agent'] = defaultdict(lambda: 0)
+        self.token['deadlock_count_per_guest'] = defaultdict(lambda: 0)
 
+    #by idle agents / guests are intended those that do not have a task
     def get_idle_agents(self):
         agents = {}
         for name, path in self.token['agents'].items():
-            if len(path) == 1:
+            if len(path) == 1: #their path has length 1 since they are still in the same position
                 agents[name] = path
         return agents
 
+    def get_idle_guests(self):
+        guests = {}
+        for name, path in self.token['guests'].items():
+            if name not in self.token['guests_to_tasks'].keys():
+                if len(path) == 1:
+                    guests[name] = path
+        return guests
+
+    #the admissible heuristic chosen in the Manhattan distance
     def admissible_heuristic(self, task_pos, agent_pos):
         return fabs(task_pos[0] - agent_pos[0]) + fabs(task_pos[1] - agent_pos[1])
 
+    #given a set of tasks, it returns the closest one according to the heuristic chosen
     def get_closest_task_name(self, available_tasks, agent_pos):
-        closest = random.choice(list(available_tasks.keys()))
+        closest = list(available_tasks.keys())[0]
         dist = self.admissible_heuristic(available_tasks[closest][0], agent_pos)
         for task_name, task in available_tasks.items():
             if self.admissible_heuristic(task[0], agent_pos) < dist:
                 closest = task_name
         return closest
 
+    #it returns the paths of the agents / guests that are moving as obstacles
     def get_moving_obstacles_agents(self, agents, time_start):
         obstacles = {}
         for name, path in agents.items():
@@ -118,19 +162,44 @@ class TokenPassingRecovery(object):
                         obstacles[(path[i][0], path[i][1], -k)] = name
         return obstacles
 
-    def get_idle_obstacles_agents(self, agents_paths, delayed_agents, time_start):
+    def get_moving_obstacles_guests(self, guests, time_start):
+        obstacles = {}
+        for name, path in guests.items():
+            if len(path) > time_start and len(path) > 1:
+                for i in range(time_start, len(path)):
+                    k = i - time_start
+                    obstacles[(path[i][0], path[i][1], k)] = name
+                    for j in range(1, self.k + 1):
+                        if i - j >= time_start:
+                            obstacles[(path[i][0], path[i][1], k - j)] = name
+                        obstacles[(path[i][0], path[i][1], k + j)] = name
+                    # Mark last element with negative time to later turn it into idle obstacle
+                    if i == len(path) - 1:
+                        obstacles[(path[i][0], path[i][1], -k)] = name
+        return obstacles
+
+    #it returns the positions of the agents / guests that are still as obstacles
+    def get_idle_obstacles_agents(self, agents_paths, time_start):
         obstacles = set()
         for path in agents_paths:
             if len(path) == 1:
                 obstacles.add((path[0][0], path[0][1]))
             if 1 < len(path) <= time_start:
                 obstacles.add((path[-1][0], path[-1][1]))
-        for agent_name in delayed_agents:
-            obstacles.add(tuple(self.token['agents'][agent_name][0]))
         return obstacles
 
+    def get_idle_obstacles_guests(self, guests_paths, time_start):
+        obstacles = set()
+        for path in guests_paths:
+            if len(path) == 1:
+                obstacles.add((path[0][0], path[0][1]))
+            if 1 < len(path) <= time_start:
+                obstacles.add((path[-1][0], path[-1][1]))
+        return obstacles
+
+    #it checks if the agent / guest is on a cell that is the pick-up / delivery of a task
     def check_safe_idle(self, agent_pos):
-        for task_name, task in self.token['tasks'].items():
+        for task in self.token['tasks'].items():
             if tuple(task[0]) == tuple(agent_pos) or tuple(task[1]) == tuple(agent_pos):
                 return False
         for start_goal in self.get_agents_to_tasks_starts_goals():
@@ -138,6 +207,16 @@ class TokenPassingRecovery(object):
                 return False
         return True
 
+    def check_safe_idle_guest(self, agent_pos):
+        for task in self.token['tasks_guest'].items():
+            if tuple(task[0]) == tuple(agent_pos) or tuple(task[1]) == tuple(agent_pos):
+                return False
+        for start_goal in self.get_guests_to_tasks_starts_goals():
+            if tuple(start_goal) == tuple(agent_pos):
+                return False
+        return True
+
+    #it returns the closest endpoint according to the defined heuristic
     def get_closest_non_task_endpoint(self, agent_pos):
         dist = -1
         res = -1
@@ -156,15 +235,46 @@ class TokenPassingRecovery(object):
             exit(1)
         return res
 
+    def get_closest_non_task_endpoint_guests(self, agent_pos):
+        dist = -1
+        res = -1
+        for endpoint in self.non_task_endpoints_guests:
+            if endpoint not in self.token['occupied_non_task_endpoints_guests']:
+                if dist == -1:
+                    dist = self.admissible_heuristic(endpoint, agent_pos)
+                    res = endpoint
+                else:
+                    tmp = self.admissible_heuristic(endpoint, agent_pos)
+                    if tmp < dist:
+                        dist = tmp
+                        res = endpoint
+        if res == -1:
+            print('Error in finding non-task endpoint guests, is instance well-formed?')
+            exit(1)
+        return res
+
+    #update of path ends for agents / guests
     def update_ends(self, agent_pos):
         if tuple(agent_pos) in self.token['path_ends']:
             self.token['path_ends'].remove(tuple(agent_pos))
         elif tuple(agent_pos) in self.token['occupied_non_task_endpoints']:
-            self.token['occupied_non_task_endpoints'].remove(tuple(agent_pos))
+            self.token['occupied_non_task_endpoints'].remove(tuple(agent_pos))        
+
+    def update_ends_guests(self, agent_pos):
+        if tuple(agent_pos) in self.token['path_ends_guest']:
+            self.token['path_ends_guest'].remove(tuple(agent_pos))
+        elif tuple(agent_pos) in self.token['occupied_non_task_endpoints_guests']:
+            self.token['occupied_non_task_endpoints_guests'].remove(tuple(agent_pos))
 
     def get_agents_to_tasks_goals(self):
         goals = set()
         for el in self.token['agents_to_tasks'].values():
+            goals.add(tuple(el['goal']))
+        return goals
+
+    def get_guests_to_tasks_goals(self):
+        goals = set()
+        for el in self.token['guests_to_tasks'].values():
             goals.add(tuple(el['goal']))
         return goals
 
@@ -175,11 +285,27 @@ class TokenPassingRecovery(object):
             starts_goals.add(tuple(el['start']))
         return starts_goals
 
+    def get_guests_to_tasks_starts_goals(self):
+        starts_goals = set()
+        for el in self.token['guests_to_tasks'].values():
+            starts_goals.add(tuple(el['goal']))
+            starts_goals.add(tuple(el['start']))
+        return starts_goals
+
     def get_completed_tasks(self):
         return self.token['completed_tasks']
 
+    def get_completed_tasks_guest(self):
+        return self.token['completed_tasks_guest']
+
     def get_completed_tasks_times(self):
         return self.token['completed_tasks_times']
+
+    def get_completed_tasks_times_guest(self):
+        return self.token['completed_tasks_times_guest']
+
+    def get_assigned_tasks_times_guest(self):
+        return self.token['assigned_tasks_times_guest']
 
     def get_n_replans(self):
         return self.token['n_replans']
@@ -190,44 +316,26 @@ class TokenPassingRecovery(object):
     def get_k(self):
         return self.k
 
-    def get_replan_every_k_delays(self):
-        return self.replan_every_k_delays
-
-    def search(self, cbs, agent_name, moving_obstacles_agents):
+    def search(self, cbs):
         path = None
         if self.p_max == 1:
             path = cbs.search()
         else:
-            self.token['prob_exceeded'] = False
-            mk = MarkovChainsMaker(self.token['agents'], self.pd)
-            for iter in range(self.p_iter):
-                path = cbs.search()
-                tmp = []
-                if path and len(path[agent_name]) > 1:
-                    for el in path[agent_name]:
-                        tmp.append([el['x'], el['y']])
-                    dic = mk.get_conflict_prob_given_path(tmp)
-                    if dic['prob'] > self.p_max:
-                        self.token['prob_exceeded'] = True
-                        print('Conflict probablility to high (', dic['prob'], ') replanning...')
-                        path = None
-                        moving_obstacles_agents[(dic['pos_max_conf'][0], dic['pos_max_conf'][1], -1)] = agent_name
-                    else:
-                        break
+            print("p_max must be 1")
         return path
 
-    def go_to_closest_non_task_endpoint(self, agent_name, agent_pos, all_idle_agents, all_delayed_agents):
+    def go_to_closest_non_task_endpoint(self, agent_name, agent_pos, all_idle_agents):
         closest_non_task_endpoint = self.get_closest_non_task_endpoint(agent_pos)
         moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], 0)
-        idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), all_delayed_agents, 0)
+        idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 0)
         agent = {'name': agent_name, 'start': agent_pos, 'goal': closest_non_task_endpoint}
-        env = Environment(self.dimensions, [agent], self.obstacles | idle_obstacles_agents, moving_obstacles_agents,
-                          a_star_max_iter=self.a_star_max_iter)
+        env = Environment(self.dimensions, [agent], self.obstacles_agents | idle_obstacles_agents, moving_obstacles_agents,
+                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_agents())
         cbs = CBS(env)
-        path_to_non_task_endpoint = self.search(cbs, agent_name, moving_obstacles_agents)
+        path_to_non_task_endpoint = self.search(cbs)
         if not path_to_non_task_endpoint:
             print("Solution to non-task endpoint not found for agent", agent_name, " instance is not well-formed.")
-            self.deadlock_recovery(agent_name, agent_pos, all_idle_agents, all_delayed_agents, 4)
+            self.deadlock_recovery(agent_name, agent_pos, all_idle_agents, 4)
             # exit(1)
         else:
             print('No available task for agent', agent_name, ' moving to safe idling position...')
@@ -239,39 +347,146 @@ class TokenPassingRecovery(object):
             for el in path_to_non_task_endpoint[agent_name]:
                 self.token['agents'][agent_name].append([el['x'], el['y']])
 
-    def get_random_close_cell(self, agent_pos, r):
-        while True:
-            cell = (agent_pos[0] + random.choice(range(-r - 1, r + 1)), agent_pos[1] + random.choice(range(-r - 1, r + 1)))
-            if cell not in self.obstacles and cell not in self.token['path_ends'] and \
-                    cell not in self.token['occupied_non_task_endpoints'] \
-                    and cell not in self.get_agents_to_tasks_goals() \
-                    and 0 <= cell[0] < self.dimensions[0] and 0 <= cell[1] < self.dimensions[1]:
-                return cell
+    def go_to_closest_non_task_endpoint_guest(self, guest_name, guest_pos, all_idle_guests):
+        closest_non_task_endpoint = self.get_closest_non_task_endpoint_guests(guest_pos)
+        j = self.token['guests'].copy()
+        j.pop(guest_name)
+        moving_obstacles_guests = self.get_moving_obstacles_guests(j, 0)
+        idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+        guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
+        env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
+                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+        cbs = CBS(env)
+        path_to_non_task_endpoint = self.search(cbs)
+        if not path_to_non_task_endpoint:
+            print("Solution to non-task endpoint not found for guest", guest_name, " instance is not well-formed.1")
+            self.deadlock_recovery_guest(guest_name, guest_pos, all_idle_guests, 4)
+            # exit(1)
+        else:
+            print('No available task for guest', guest_name, ' moving to safe idling position...')
+            self.update_ends_guests(guest_pos)
+            self.token['occupied_non_task_endpoints_guests'].add(tuple(closest_non_task_endpoint))
+            self.token['guests_to_tasks'][guest_name] = {'task_name': 'safe_idle', 'start': guest_pos,
+                                                         'goal': closest_non_task_endpoint, 'predicted_cost': 0}
+            self.token['guests'][guest_name] = []
+            for el in path_to_non_task_endpoint[guest_name]:
+                self.token['guests'][guest_name].append([el['x'], el['y']])
 
-    def deadlock_recovery(self, agent_name, agent_pos, all_idle_agents, all_delayed_agents, r):
-        self.token['deadlock_count_per_agent'][agent_name] += 1
-        if self.token['deadlock_count_per_agent'][agent_name] >= 5:
-            self.token['deadlock_count_per_agent'][agent_name] = 0
-            random_close_cell = self.get_random_close_cell(agent_pos, r)
-            moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], 0)
-            idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), all_delayed_agents, 0)
-            agent = {'name': agent_name, 'start': agent_pos, 'goal': random_close_cell}
-            env = Environment(self.dimensions, [agent], self.obstacles | idle_obstacles_agents, moving_obstacles_agents,
-                              a_star_max_iter=self.a_star_max_iter)
-            cbs = CBS(env)
-            path_to_non_task_endpoint = self.search(cbs, agent_name, moving_obstacles_agents)
-            if not path_to_non_task_endpoint:
-                print("No solution to deadlock recovery for agent", agent_name, " retrying later.")
-            else:
-                # Don't consider this a task, so don't add to agents_to_tasks
-                print('Agent', agent_name, 'causing deadlock, moving to safer position...')
-                self.update_ends(agent_pos)
-                self.token['agents'][agent_name] = []
-                for el in path_to_non_task_endpoint[agent_name]:
-                    self.token['agents'][agent_name].append([el['x'], el['y']])
+    def go_to_closest_non_task_endpoint_guest2(self, guest_name, guest_pos, all_idle_guests):
+        closest_non_task_endpoint = self.get_closest_non_task_endpoint_guests(guest_pos)
+        j = self.token['guests'].copy()
+        j.pop(guest_name)
+        moving_obstacles_guests = self.get_moving_obstacles_guests(j, 0)
+        idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+        guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
+        env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
+                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+        cbs = CBS(env)
+        path_to_non_task_endpoint = self.search(cbs)
+        if not path_to_non_task_endpoint:
+            print("Solution to non-task endpoint not found for guest", guest_name, " instance is not well-formed.2")
+            self.deadlock_recovery_guest(guest_name, guest_pos, all_idle_guests, 4)
+            # exit(1)
+        else:
+            print('No available task for guest', guest_name, ' moving to safe idling position2...')
+            self.update_ends_guests(guest_pos)
+            self.token['occupied_non_task_endpoints_guests'].add(tuple(closest_non_task_endpoint))
+            self.token['guests_to_tasks'][guest_name] = {'task_name': 'safe_idle', 'start': guest_pos,
+                                                         'goal': closest_non_task_endpoint, 'predicted_cost': 0}
+            self.token['guests'][guest_name] = []
+            self.token['guests'][guest_name].append(guest_pos)
+            for el in path_to_non_task_endpoint[guest_name]:
+                self.token['guests'][guest_name].append([el['x'], el['y']])
+
+    def go_to_closest_non_task_endpoint_guest3(self, guest_name, guest_pos, all_idle_guests):
+        closest_non_task_endpoint = self.get_closest_non_task_endpoint_guests(guest_pos)
+        j = self.token['guests'].copy()
+        j.pop(guest_name)
+        moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'].copy(), 0)
+        idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+        guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_non_task_endpoint}
+        env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
+                          a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+        cbs = CBS(env)
+        path_to_non_task_endpoint = self.search(cbs)
+        if not path_to_non_task_endpoint:
+            print("Solution to non-task endpoint not found for guest", guest_name, " instance is not well-formed.3")
+            self.deadlock_recovery_guest(guest_name, guest_pos, all_idle_guests, 4)
+            # exit(1)
+        else:
+            print('No available task for guest', guest_name, ' moving to safe idling position3...')
+            self.update_ends_guests(guest_pos)
+            self.token['occupied_non_task_endpoints_guests'].add(tuple(closest_non_task_endpoint))
+            self.token['guests_to_tasks'][guest_name] = {'task_name': 'safe_idle', 'start': guest_pos,
+                                                         'goal': closest_non_task_endpoint, 'predicted_cost': 0}
+            self.token['guests'][guest_name] = []
+            for el in path_to_non_task_endpoint[guest_name]:
+                self.token['guests'][guest_name].append([el['x'], el['y']])
+
+    # def get_random_close_cell_guest(self, guest_pos, r):
+    #     while True:
+    #         cell = (guest_pos[0] + random.choice(range(-r - 1, r + 1)), guest_pos[1] + random.choice(range(-r - 1, r + 1)))
+    #         if cell not in self.obstacles_guests and cell not in self.token['path_ends_guest'] and \
+    #                 cell not in self.token['occupied_non_task_endpoints_guests'] \
+    #                 and cell not in self.get_guests_to_tasks_goals() \
+    #                 and 0 <= cell[0] < self.dimensions[0] and 0 <= cell[1] < self.dimensions[1]:
+    #             return cell
+
+    # def get_random_close_cell(self, agent_pos, r):
+    #     while True:
+    #         cell = (agent_pos[0] + random.choice(range(-r - 1, r + 1)), agent_pos[1] + random.choice(range(-r - 1, r + 1)))
+    #         if cell not in self.obstacles_agents and cell not in self.token['path_ends'] and \
+    #                 cell not in self.token['occupied_non_task_endpoints'] \
+    #                 and cell not in self.get_agents_to_tasks_goals() \
+    #                 and 0 <= cell[0] < self.dimensions[0] and 0 <= cell[1] < self.dimensions[1]:
+    #             return cell
+
+    # def deadlock_recovery(self, agent_name, agent_pos, all_idle_agents, r):
+    #     self.token['deadlock_count_per_agent'][agent_name] += 1
+    #     if self.token['deadlock_count_per_agent'][agent_name] >= 5:
+    #         self.token['deadlock_count_per_agent'][agent_name] = 0
+    #         random_close_cell = self.get_random_close_cell(agent_pos, r)
+    #         moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], 0)
+    #         idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 0)
+    #         agent = {'name': agent_name, 'start': agent_pos, 'goal': random_close_cell}
+    #         env = Environment(self.dimensions, [agent], self.obstacles_agents | idle_obstacles_agents, moving_obstacles_agents,
+    #                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_agents())
+    #         cbs = CBS(env)
+    #         path_to_non_task_endpoint = self.search(cbs)
+    #         if not path_to_non_task_endpoint:
+    #             print("No solution to deadlock recovery for agent", agent_name, " retrying later.")
+    #         else:
+    #             # Don't consider this a task, so don't add to agents_to_tasks
+    #             print('Agent', agent_name, 'causing deadlock, moving to safer position...')
+    #             self.update_ends(agent_pos)
+    #             self.token['agents'][agent_name] = []
+    #             for el in path_to_non_task_endpoint[agent_name]:
+    #                 self.token['agents'][agent_name].append([el['x'], el['y']])
+
+    # def deadlock_recovery_guest(self, guest_name, guest_pos, all_idle_guests, r):
+    #     self.token['deadlock_count_per_guest'][guest_name] += 1
+    #     if self.token['deadlock_count_per_guest'][guest_name] >= 5:
+    #         self.token['deadlock_count_per_guest'][guest_name] = 0
+    #         random_close_cell = self.get_random_close_cell_guest(guest_pos, r)
+    #         moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'], 0)
+    #         idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+    #         guest = {'name': guest_name, 'start': guest_pos, 'goal': random_close_cell}
+    #         env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests, moving_obstacles_guests,
+    #                           a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+    #         cbs = CBS(env)
+    #         path_to_non_task_endpoint = self.search(cbs)
+    #         if not path_to_non_task_endpoint:
+    #             print("No solution to deadlock recovery for guest", guest_name, " retrying later.")
+    #         else:
+    #             # Don't consider this a task, so don't add to guests_to_tasks
+    #             print('Guest', guest_name, 'causing deadlock, moving to safer position...')
+    #             self.update_ends_guests(guest_pos)
+    #             self.token['guests'][guest_name] = []
+    #             for el in path_to_non_task_endpoint[guest_name]:
+    #                 self.token['guests'][guest_name].append([el['x'], el['y']])
 
     def time_forward(self):
-        # Update completed tasks
+        # Update completed tasks for the agents
         for agent_name in self.token['agents']:
             pos = self.simulation.actual_paths[agent_name][-1]
             if agent_name in self.token['agents_to_tasks'] and (pos['x'], pos['y']) == tuple(
@@ -288,59 +503,28 @@ class TokenPassingRecovery(object):
                 'task_name'] == 'safe_idle':
                 self.token['agents_to_tasks'].pop(agent_name)
 
-        # Check delayed agents and agents affected by delays
-        if self.new_recovery:
-            self.token['delayed_agents'] = self.simulation.get_delayed_agents()
-            for name in self.token['delayed_agents']:
-                print('Agent', name, 'delayed or affected by delay!')
-                path = self.token['agents'][name]
-                self.token['n_replans'] = self.token['n_replans'] + 1
-                self.update_ends(path[-1])
-                if path[0] in self.non_task_endpoints:
-                    self.token['occupied_non_task_endpoints'].add(tuple(path[0]))
-                else:
-                    self.token['path_ends'].add(tuple(path[0]))
-                if name in self.token['agents_to_tasks']:
-                    if self.token['agents_to_tasks'][name]['start'] not in path:
-                        self.token['delayed_agents_to_reach_task_start'].append(name)
-                self.token['agents'][name] = [path[0]]
-        else:
-            self.token['delayed_agents'] = []
-            delayed_agents_pos = []
-            for name, path in self.token['agents'].items():
-                actual_state = self.simulation.get_actual_paths()[name][-1]
-                if path[0] != [actual_state['x'], actual_state['y']]:
-                    print('Agent', name, 'delayed!')
-                    # self.token['n_replans'] = self.token['n_replans'] + 1
-                    self.token['delayed_agents'].append(name)
-                    delayed_agents_pos.append([actual_state['x'], actual_state['y']])
-                    self.update_ends(path[-1])
-                    pos = tuple([actual_state['x'], actual_state['y']])
-                    if pos in self.non_task_endpoints:
-                        self.token['occupied_non_task_endpoints'].add(pos)
-                    else:
-                        self.token['path_ends'].add(pos)
-                    if self.token['agents_to_tasks'][name]['start'] not in path:
-                        self.token['delayed_agents_to_reach_task_start'].append(name)
-                    self.token['agents'][name] = [[actual_state['x'], actual_state['y']]]
-            for name, path in self.token['agents'].items():
-                if name not in self.token['delayed_agents']:
-                    for i in range(len(path)):
-                        if path[i] in delayed_agents_pos:
-                            print('Agent', name, 'affected by delay!')
-                            self.token['n_replans'] = self.token['n_replans'] + 1
-                            self.update_ends(path[-1])
-                            if path[0] in self.non_task_endpoints:
-                                self.token['occupied_non_task_endpoints'].add(tuple(path[0]))
-                            else:
-                                self.token['path_ends'].add(tuple(path[0]))
-                            if self.token['agents_to_tasks'][name]['start'] not in path:
-                                self.token['delayed_agents_to_reach_task_start'].append(name)
-                            self.token['agents'][name] = [path[0]]
-                            break
+        # Update completed tasks for the guest
+        for guest_name in self.token['guests']:
+            pos = self.simulation.actual_paths_guests[guest_name][-1]
+            if guest_name in self.token['guests_to_tasks'] and (pos['x'], pos['y']) == tuple(
+                    self.token['guests_to_tasks'][guest_name]['goal']) \
+                    and len(self.token['guests'][guest_name]) == 1 and self.token['guests_to_tasks'][guest_name][
+                'task_name'] != 'safe_idle' and guest_name not in self.simulation.to_replan_from_start \
+                and guest_name not in self.simulation.to_replan_from_goal:
+                self.token['completed_tasks_guest'] = self.token['completed_tasks_guest'] + 1
+                self.token['completed_tasks_times_guest'][
+                    self.token['guests_to_tasks'][guest_name]['task_name']] = self.simulation.get_time()
+                self.token['guests_to_tasks'].pop(guest_name)
+            if guest_name in self.token['guests_to_tasks'] and (pos['x'], pos['y']) == tuple(
+                    self.token['guests_to_tasks'][guest_name]['goal']) \
+                    and len(self.token['guests'][guest_name]) == 1 and self.token['guests_to_tasks'][guest_name][
+                'task_name'] == 'safe_idle':
+                self.token['guests_to_tasks'].pop(guest_name)
 
+        
+        # AGENTS
         # TODO do this maybe only for old recovery
-        # Check if somehow an agent path collides with an idle agent (may happen because of delays)
+        # Check if somehow an agent path collides with an idle agent
         if not self.new_recovery:
             for name, path in self.get_idle_agents().items():
                 self.token['agent_at_end_path'].append(name)
@@ -356,26 +540,48 @@ class TokenPassingRecovery(object):
                             else:
                                 self.token['path_ends'].add(tuple(path[0]))
                             # TODO check this rare keyerror
-                            if self.token['agents_to_tasks'][name]['start'] not in path:
-                                self.token['delayed_agents_to_reach_task_start'].append(name)
                             self.token['agents'][name] = [path[0]]
                             break
             self.token['agent_at_end_path'] = []
             self.token['agent_at_end_path_pos'] = []
 
+        #GUESTS
+        # TODO do this maybe only for old recovery
+        # Check if somehow a guest path collides with an idle guest
+        if not self.new_recovery:
+            for name, path in self.get_idle_guests().items():
+                self.token['guest_at_end_path'].append(name)
+                self.token['guest_at_end_path_pos'].append(path[0])
+            for name, path in self.token['guests'].items():
+                if name not in self.token['guest_at_end_path']:
+                    for i in range(len(path)):
+                        if path[i] in self.token['guest_at_end_path_pos']:
+                            print('Guest', name, 'will impact end task guest, replanning...')
+                            # self.update_ends(path[-1])
+                            if path[0] in self.non_task_endpoints_guests:
+                                self.token['occupied_non_task_endpoints_guests'].add(tuple(path[0]))
+                            else:
+                                self.token['path_ends_guest'].add(tuple(path[0]))
+                            # TODO check this rare keyerror
+                            self.token['guests'][name] = [path[0]]
+                            break
+            self.token['guest_at_end_path'] = []
+            self.token['guest_at_end_path_pos'] = []
+
         # Collect new tasks and assign them, if possible
         for t in self.simulation.get_new_tasks():
             self.token['tasks'][t['task_name']] = [t['start'], t['goal']]
             self.token['start_tasks_times'][t['task_name']] = self.simulation.get_time()
-        idle_agents = self.get_idle_agents()
+        for t in self.simulation.get_new_tasks_guest():
+            self.token['tasks_guest'][t['task_name']] = [t['start'], t['goal']]
+            self.token['start_tasks_times_guest'][t['task_name']] = self.simulation.get_time()
+
+        #AGENTS
+        idle_agents = self.get_idle_agents() #prendo gli agenti che oziano
         while len(idle_agents) > 0:
-            agent_name = random.choice(list(idle_agents.keys()))
-            # agent_name = list(idle_agents.keys())[0]
+            agent_name = list(idle_agents.keys())[0]
             all_idle_agents = self.token['agents'].copy()
             all_idle_agents.pop(agent_name)
-            all_delayed_agents = self.token['delayed_agents'].copy()
-            if agent_name in all_delayed_agents:
-                all_delayed_agents.remove(agent_name)
             agent_pos = idle_agents.pop(agent_name)[0]
             available_tasks = {}
             for task_name, task in self.token['tasks'].items():
@@ -387,61 +593,58 @@ class TokenPassingRecovery(object):
             if len(available_tasks) > 0 or agent_name in self.token['agents_to_tasks']:
                 if agent_name in self.token['agents_to_tasks']:
                     closest_task_name = self.token['agents_to_tasks'][agent_name]['task_name']
-                    if agent_name in self.token['delayed_agents_to_reach_task_start']:
-                        closest_task = [self.token['agents'][agent_name][0],
-                                        self.token['agents_to_tasks'][agent_name]['goal']]
-                    else:
-                        closest_task = [self.token['agents_to_tasks'][agent_name]['start'],
-                                        self.token['agents_to_tasks'][agent_name]['goal']]
+                    closest_task = [self.token['agents_to_tasks'][agent_name]['start'],
+                    self.token['agents_to_tasks'][agent_name]['goal']]
                 else:
                     closest_task_name = self.get_closest_task_name(available_tasks, agent_pos)
                     closest_task = available_tasks[closest_task_name]
+                print('task_assegnato agente', closest_task)
                 moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], 0)
-                idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), all_delayed_agents, 0)
+                idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 0)
+                #print('moving_obstacles_agents PER START1',moving_obstacles_agents)
+                #print('TOKEN',self.token['agents'])
                 agent = {'name': agent_name, 'start': agent_pos, 'goal': closest_task[0]}
-                env = Environment(self.dimensions, [agent], self.obstacles | idle_obstacles_agents,
-                                  moving_obstacles_agents, a_star_max_iter=self.a_star_max_iter)
+                env = Environment(self.dimensions, [agent], self.obstacles_agents | idle_obstacles_agents,
+                                moving_obstacles_agents, a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_agents())
                 cbs = CBS(env)
-                path_to_task_start = self.search(cbs, agent_name, moving_obstacles_agents)
+                path_to_task_start = self.search(cbs)
+                #print('path_to_task_start',path_to_task_start)
                 if not path_to_task_start:
                     print("Solution not found to task start for agent", agent_name, " idling at current position...")
-                    if len(self.token['delayed_agents']) == 0 and not self.token['prob_exceeded']:
-                        print('Instance is not well-formed or a_star_max_iter is too low for this environment.')
-                        self.deadlock_recovery(agent_name, agent_pos, all_idle_agents, all_delayed_agents, 4)
                         # exit(1)
                 else:
                     print("Solution found to task start for agent", agent_name, " searching solution to task goal...")
+                    #print('path_to_task_start',path_to_task_start)
                     cost1 = env.compute_solution_cost(path_to_task_start)
                     # Use cost - 1 because idle cost is 1
                     moving_obstacles_agents = self.get_moving_obstacles_agents(self.token['agents'], cost1 - 1)
-                    idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), all_delayed_agents,
-                                                                           cost1 - 1)
+                    idle_obstacles_agents = self.get_idle_obstacles_agents(all_idle_agents.values(), 
+                                                                        cost1 - 1)
+                    #print('moving_obstacles_agents PER GOAL1',moving_obstacles_agents)
+                    #print('TOKEN',self.token['agents'])
                     agent = {'name': agent_name, 'start': closest_task[0], 'goal': closest_task[1]}
-                    env = Environment(self.dimensions, [agent], self.obstacles | idle_obstacles_agents,
-                                      moving_obstacles_agents, a_star_max_iter=self.a_star_max_iter)
+                    env = Environment(self.dimensions, [agent], self.obstacles_agents | idle_obstacles_agents,
+                                    moving_obstacles_agents, a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_agents())
                     cbs = CBS(env)
-                    path_to_task_goal = self.search(cbs, agent_name, moving_obstacles_agents)
+                    path_to_task_goal = self.search(cbs)
+                    #print('path_to_task_goal',path_to_task_goal)
                     if not path_to_task_goal:
                         print("Solution not found to task goal for agent", agent_name, " idling at current position...")
-                        if len(self.token['delayed_agents']) == 0 and not self.token['prob_exceeded']:
-                            print('Instance is not well-formed  or a_star_max_iter is too low for this environment.')
-                            self.deadlock_recovery(agent_name, agent_pos, all_idle_agents, all_delayed_agents, 4)
                             # exit(1)
                     else:
                         print("Solution found to task goal for agent", agent_name, " doing task...")
+                        #print('path_to_task_goal',path_to_task_goal)
                         cost2 = env.compute_solution_cost(path_to_task_goal)
                         if agent_name not in self.token['agents_to_tasks']:
                             self.token['tasks'].pop(closest_task_name)
                             task = available_tasks.pop(closest_task_name)
                         else:
                             task = closest_task
-                        if agent_name in self.token['delayed_agents_to_reach_task_start']:
-                            self.token['delayed_agents_to_reach_task_start'].remove(agent_name)
                         last_step = path_to_task_goal[agent_name][-1]
                         self.update_ends(agent_pos)
                         self.token['path_ends'].add(tuple([last_step['x'], last_step['y']]))
                         self.token['agents_to_tasks'][agent_name] = {'task_name': closest_task_name, 'start': task[0],
-                                                                     'goal': task[1], 'predicted_cost': cost1 + cost2}
+                                                                    'goal': task[1], 'predicted_cost': cost1 + cost2}
                         self.token['agents'][agent_name] = []
                         for el in path_to_task_start[agent_name]:
                             self.token['agents'][agent_name].append([el['x'], el['y']])
@@ -452,10 +655,96 @@ class TokenPassingRecovery(object):
             elif self.check_safe_idle(agent_pos):
                 print('No available tasks for agent', agent_name, ' idling at current position...')
             else:
-                self.go_to_closest_non_task_endpoint(agent_name, agent_pos, all_idle_agents, all_delayed_agents)
+                self.go_to_closest_non_task_endpoint(agent_name, agent_pos, all_idle_agents)
 
-        # Advance along paths in the token
+        #GUESTS
+        idle_guests = self.get_idle_guests() #prendo gli agenti che oziano
+        while len(idle_guests) > 0:
+            guest_name = list(idle_guests.keys())[0]
+            all_idle_guests = self.token['guests'].copy()
+            all_idle_guests.pop(guest_name)
+            guest_pos = idle_guests.pop(guest_name)[0]
+            available_tasks = {}
+            for task_name, task in self.token['tasks_guest'].items():
+                if tuple(task[0]) not in self.token['path_ends'].difference({tuple(guest_pos)}) and tuple(
+                        task[1]) not in self.token['path_ends'].difference({tuple(guest_pos)}) \
+                        and tuple(task[0]) not in self.get_guests_to_tasks_goals() and tuple(
+                    task[1]) not in self.get_guests_to_tasks_goals():
+                    available_tasks[task_name] = task
+            if len(available_tasks) > 0 or guest_name in self.token['guests_to_tasks']:
+                if guest_name in self.token['guests_to_tasks']:
+                    closest_task_name = self.token['guests_to_tasks'][guest_name]['task_name']
+                    closest_task = [self.token['guests_to_tasks'][guest_name]['start'],
+                    self.token['guests_to_tasks'][guest_name]['goal']]
+                else:
+                    closest_task_name = self.get_closest_task_name(available_tasks, guest_pos)
+                    closest_task = available_tasks[closest_task_name]
+                self.token['assigned_tasks_times_guest'][closest_task_name] = self.simulation.get_time()
+                print('task_assegnato', closest_task)
+                moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'], 0)
+                idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 0)
+                guest = {'name': guest_name, 'start': guest_pos, 'goal': closest_task[0]}
+                env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
+                                moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+                cbs = CBS(env)
+                path_to_task_start = self.search(cbs)
+                #print('path_to_task_start',path_to_task_start)
+                if not path_to_task_start:
+                    print("Solution not found to task start for guest", guest_name, " idling at current position...")
+                        # exit(1)
+                else:
+                    print("Solution found to task start for guest", guest_name, " searching solution to task goal...")
+                    #print('path_to_task_start',path_to_task_start)
+                    cost1 = env.compute_solution_cost(path_to_task_start)
+                    # Use cost - 1 because idle cost is 1
+                    moving_obstacles_guests = self.get_moving_obstacles_guests(self.token['guests'], cost1 - 1)
+                    idle_obstacles_guests = self.get_idle_obstacles_guests(all_idle_guests.values(), 
+                                                                        cost1 - 1)
+                    guest = {'name': guest_name, 'start': closest_task[0], 'goal': closest_task[1]}
+                    env = Environment(self.dimensions, [guest], self.obstacles_guests | idle_obstacles_guests,
+                                    moving_obstacles_guests, a_star_max_iter=self.a_star_max_iter, graph=self.simulation.get_graph_guests())
+                    cbs = CBS(env)
+                    path_to_task_goal = self.search(cbs)
+                    #print('path_to_task_goal',path_to_task_goal)
+                    if not path_to_task_goal:
+                        print("Solution not found to task goal for guest", guest_name, " idling at current position...")
+                            # exit(1)
+                    else:
+                        print("Solution found to task goal for guest", guest_name, " doing task...")
+                        #print('path_to_task_goal',path_to_task_goal)
+                        cost2 = env.compute_solution_cost(path_to_task_goal)
+                        if guest_name not in self.token['guests_to_tasks']:
+                            self.token['tasks_guest'].pop(closest_task_name)
+                            task = available_tasks.pop(closest_task_name)
+                        else:
+                            task = closest_task
+                        last_step = path_to_task_goal[guest_name][-1]
+                        self.update_ends(guest_pos)
+                        self.token['path_ends'].add(tuple([last_step['x'], last_step['y']]))
+                        self.token['guests_to_tasks'][guest_name] = {'task_name': closest_task_name, 'start': task[0],
+                                                                    'goal': task[1], 'predicted_cost': cost1 + cost2}
+                        self.token['guests'][guest_name] = []
+                        for el in path_to_task_start[guest_name]:
+                            self.token['guests'][guest_name].append([el['x'], el['y']])
+                        # Don't repeat twice same step
+                        self.token['guests'][guest_name] = self.token['guests'][guest_name][:-1]
+                        for el in path_to_task_goal[guest_name]:
+                            self.token['guests'][guest_name].append([el['x'], el['y']])
+            elif self.check_safe_idle(guest_pos):
+                print('No available tasks for guest', guest_name, ' idling at current position...')
+            else:
+                self.go_to_closest_non_task_endpoint(guest_name, guest_pos, all_idle_guests)
+            
+        #GUESTS 
+        
+        # Advance along paths in the token agents
         if not self.new_recovery:
             for name, path in self.token['agents'].items():
                 if len(path) > 1:
                     self.token['agents'][name] = path[1:]
+
+        # Advance along paths in the token guests
+        if not self.new_recovery:
+            for name, path in self.token['guests'].items():
+                if len(path) > 1:
+                    self.token['guests'][name] = path[1:]

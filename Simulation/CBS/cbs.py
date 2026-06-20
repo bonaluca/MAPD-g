@@ -3,6 +3,7 @@ Python implementation of Conflict-based search
 author: Ashwin Bose (@atb033)
 author: Giacomo Lodigiani (@Lodz97)
 """
+from importlib.resources import path
 import sys
 sys.path.insert(0, '../')
 import argparse
@@ -12,6 +13,7 @@ from itertools import combinations
 from copy import deepcopy
 
 from Simulation.CBS.a_star import AStar
+#from Simulation.simulation_new_recovery import SimulationNewRecovery
 
 class Location(object):
     def __init__(self, x=-1, y=-1):
@@ -91,13 +93,15 @@ class Constraints(object):
             "EC: " + str([str(ec) for ec in self.edge_constraints])
 
 class Environment(object):
-    def __init__(self, dimension, agents, obstacles, moving_obstacles=None, a_star_max_iter=-1):
+    def __init__(self, dimension, agents, obstacles, moving_obstacles=None, a_star_max_iter=-1, graph=None):
         if moving_obstacles is None:
             moving_obstacles = []
         self.dimension = dimension
         self.obstacles = obstacles
         self.moving_obstacles = moving_obstacles
         self.a_star_max_iter = a_star_max_iter
+
+        self.graph = graph
 
         self.agents = agents
         self.agent_dict = {}
@@ -110,6 +114,8 @@ class Environment(object):
         self.a_star = AStar(self)
 
     def get_neighbors(self, state):
+        if type(state) != State:
+            state=State(state[0], Location(state[1], state[2]))
         neighbors = []
 
         # Wait action
@@ -211,6 +217,7 @@ class Environment(object):
             and (state.location.x, state.location.y) not in self.get_all_obstacles(state.time) \
             and (state.location.x, state.location.y, state.time) not in self.moving_obstacles
 
+
     def transition_valid(self, state_1, state_2):
         tup_1 = (state_1.location.x, state_1.location.y, state_2.time)
         tup_2 = (state_2.location.x, state_2.location.y, state_1.time)
@@ -242,7 +249,15 @@ class Environment(object):
         solution = {}
         for agent in self.agent_dict.keys():
             self.constraints = self.constraint_dict.setdefault(agent, Constraints())
-            local_solution = self.a_star.search(agent)
+            path_def = self.a_star.search(agent, self.graph)
+            if path_def != False:
+                t = 0
+                local_solution = []
+                for i in path_def:
+                    local_solution.append(State(time=t, location=Location(i[0],i[1])))
+                    t += 1
+            else:
+                local_solution = False
             if not local_solution:
                 return False
             solution.update({agent:local_solution})
@@ -277,6 +292,7 @@ class CBS(object):
         start = HighLevelNode()
         # TODO: Initialize it in a better way
         start.constraint_dict = {}
+        
         for agent in self.env.agent_dict.keys():
             start.constraint_dict[agent] = Constraints()
         start.solution = self.env.compute_solution()
@@ -297,6 +313,8 @@ class CBS(object):
                 print("Low level CBS - Solution found")
 
                 return self.generate_plan(P.solution)
+            else:
+                print('THERE IS A CONFLICT TO ADD')
 
             constraint_dict = self.env.create_constraints_from_conflict(conflict_dict)
 

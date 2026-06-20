@@ -15,14 +15,16 @@ import os
 import RoothPath
 
 
-Colors = ['orange', 'blue', 'green']
+Colors = ['orange', 'blue', 'orange', 'red']
 
 
 class Animation:
-    def __init__(self, map, schedule, slow_factor=10):
+    def __init__(self, map, schedule, slow_factor=10, alpha = 0, map_name=None):
         self.map = map
         self.schedule = schedule
         self.slow_factor = slow_factor
+        self.alpha = alpha
+        self.map_name = map_name
         self.combined_schedule = {}
         self.combined_schedule.update(self.schedule["schedule"])
 
@@ -36,8 +38,11 @@ class Animation:
         self.patches = []
         self.artists = []
         self.agents = dict()
+        self.guests = dict()
         self.agent_names = dict()
+        self.guest_names = dict()
         self.tasks = dict()
+        self.tasks_guest = dict()
         # Create boundary patch
         xmin = -0.5
         ymin = -0.5
@@ -63,6 +68,9 @@ class Animation:
         for e in map["map"]["non_task_endpoints"]:
             x, y = e[0], e[1]
             self.patches.append(Circle((x, y), 0.4, facecolor='green', edgecolor='black'))
+        for e in map["map"]["non_task_endpoints_guests"]:
+            x, y = e[0], e[1]
+            self.patches.append(Circle((x, y), 0.4, facecolor='lightgreen', edgecolor='black'))
 
         task_colors = np.random.rand(len(map["tasks"]), 3)
         for t, i in zip(map["tasks"], range(len(map["tasks"]))):
@@ -73,6 +81,16 @@ class Animation:
             x_g, y_g = t['goal'][0], t['goal'][1]
             self.tasks[t['task_name']].append(RegularPolygon((x_g, y_g - 0.05), 3, 0.2, facecolor=task_colors[i], edgecolor='black', alpha=0))
             self.patches.append(self.tasks[t['task_name']][1])
+
+        task_colors_guest = np.random.rand(len(map["tasks_guest"]), 3)
+        for t, i in zip(map["tasks_guest"], range(len(map["tasks_guest"]))):
+            x_s, y_s = t['start'][0], t['start'][1]
+            self.tasks_guest[t['task_name']] = [RegularPolygon((x_s, y_s - 0.05), 6, 0.2, facecolor=task_colors[i], edgecolor='black', alpha=0)]
+            self.patches.append(self.tasks_guest[t['task_name']][0])
+        for t, i in zip(map["tasks_guest"], range(len(map["tasks_guest"]))):
+            x_g, y_g = t['goal'][0], t['goal'][1]
+            self.tasks_guest[t['task_name']].append(RegularPolygon((x_g, y_g - 0.05), 5, 0.2, facecolor=task_colors_guest[i], edgecolor='black', alpha=0))
+            self.patches.append(self.tasks_guest[t['task_name']][1])
 
         # Create agents:
         self.T = 0
@@ -93,15 +111,36 @@ class Animation:
             self.agent_names[name].set_verticalalignment('center')
             self.artists.append(self.agent_names[name])
 
+        # Create guests:
+        self.S = 0
+        # Draw goals first
+        for d, i in zip(map["guests"], range(0, len(map["guests"]))):
+            if 'goal' in d:
+                self.patches.append(
+                    Rectangle((d["goal"][0] - 0.25, d["goal"][1] - 0.25), 0.5, 0.5, facecolor=Colors[0], edgecolor='black',
+                              alpha=0.5))
+        for d, i in zip(map["guests"], range(0, len(map["guests"]))):
+            name = d["name"]
+            self.guests[name] = Circle((d["start"][0], d["start"][1]), 0.3, facecolor=Colors[3], edgecolor='black')
+            self.guests[name].original_face_color = Colors[3]
+            self.patches.append(self.guests[name])
+            self.S = max(self.S, schedule["schedule"][name][-1]["t"])
+            self.guest_names[name] = self.ax.text(d["start"][0], d["start"][1], name.replace('guest', ''))
+            self.guest_names[name].set_horizontalalignment('center')
+            self.guest_names[name].set_verticalalignment('center')
+            self.artists.append(self.guest_names[name])
+
         # self.ax.set_axis_off()
         # self.fig.axes[0].set_visible(False)
         # self.fig.axes.get_yaxis().set_visible(False)
 
         # self.fig.tight_layout()
 
+        self.M = max(self.T, self.S)
+
         self.anim = animation.FuncAnimation(self.fig, self.animate_func,
                                             init_func=self.init_func,
-                                            frames=int(self.T + 1) * self.slow_factor,
+                                            frames=int(self.M + 1) * self.slow_factor,
                                             interval=10,
                                             blit=True,
                                             repeat=False)
@@ -126,14 +165,26 @@ class Animation:
 
     def animate_func(self, i):
         for agent_name, agent in self.combined_schedule.items():
-            pos = self.getState(i / self.slow_factor, agent)
-            p = (pos[0], pos[1])
-            self.agents[agent_name].center = p
-            self.agent_names[agent_name].set_position(p)
+            if agent_name != 'guest1' and agent_name != 'guest2' and agent_name != 'guest3'and agent_name != 'guest4' and agent_name != 'guest5':
+                pos = self.getState(i / self.slow_factor, agent)
+                p = (pos[0], pos[1])
+                self.agents[agent_name].center = p
+                self.agent_names[agent_name].set_position(p)
 
-        # Reset all colors
+        for guest_name, guest in self.combined_schedule.items():
+            if guest_name == 'guest1' or guest_name == 'guest2' or guest_name == 'guest3' or guest_name == 'guest4' or guest_name == 'guest5':
+                pos = self.getState(i / self.slow_factor, guest)
+                p = (pos[0], pos[1])
+                self.guests[guest_name].center = p
+                self.guest_names[guest_name].set_position(p)
+
+        # Reset all colors agents
         for _, agent in self.agents.items():
             agent.set_facecolor(agent.original_face_color)
+
+        # Reset all colors guests
+        for _, guest in self.guests.items():
+            guest.set_facecolor(guest.original_face_color)
 
         # Make tasks visible at the right time
         for t in map["tasks"]:
@@ -144,7 +195,16 @@ class Animation:
                 self.tasks[t['task_name']][0].set_alpha(0)
                 self.tasks[t['task_name']][1].set_alpha(0)
 
-        # Check drive-drive collisions
+        # Make guest tasks visible at the right time
+        for t in map["tasks_guest"]:
+            if t['start_time'] <= i / self.slow_factor + 1 <= self.schedule['completed_tasks_times_guest'][t['task_name']]:
+                self.tasks_guest[t['task_name']][0].set_alpha(0.5)
+                self.tasks_guest[t['task_name']][1].set_alpha(0.5)
+            else:
+                self.tasks_guest[t['task_name']][0].set_alpha(0)
+                self.tasks_guest[t['task_name']][1].set_alpha(0)
+
+        # Check drive-drive collisions agents
         agents_array = [agent for _, agent in self.agents.items()]
         for i in range(0, len(agents_array)):
             for j in range(i + 1, len(agents_array)):
@@ -156,6 +216,19 @@ class Animation:
                     d1.set_facecolor('red')
                     d2.set_facecolor('red')
                     print("COLLISION! (agent-agent) ({}, {})".format(i, j))
+
+        # Check drive-drive collisions guests
+        guests_array = [guest for _, guest in self.guests.items()]
+        for i in range(0, len(guests_array)):
+            for j in range(i + 1, len(guests_array)):
+                d1 = guests_array[i]
+                d2 = guests_array[j]
+                pos1 = np.array(d1.center)
+                pos2 = np.array(d2.center)
+                if np.linalg.norm(pos1 - pos2) < 0.7:
+                    d1.set_facecolor('blue')
+                    d2.set_facecolor('blue')
+                    print("COLLISION! (guest-guest) ({}, {})".format(i, j), i, j)
 
         return self.patches + self.artists
 
@@ -181,6 +254,8 @@ if __name__ == "__main__":
     parser.add_argument("-map", help="input file containing map")
     parser.add_argument("-schedule", help="schedule for agents")
     parser.add_argument('-slow_factor', help='Slow factor of visualization', default=1, type=int)
+    parser.add_argument('-alpha', help='Slow factor of visualization', type=float)
+    parser.add_argument('-map_name', help='Slow factor of visualization')
     parser.add_argument('--video', dest='video', default=None,
                         help="output video file (or leave empty to show on screen)")
     parser.add_argument("--speed", type=int, default=1, help="speedup-factor")
@@ -189,8 +264,8 @@ if __name__ == "__main__":
     if args.map is None:
         with open(os.path.join(RoothPath.get_root(), 'config.json'), 'r') as json_file:
             config = json.load(json_file)
-        args.map = os.path.join(RoothPath.get_root(), os.path.join(config['input_path'], config['input_name'] + config['visual_postfix'],))
-        args.schedule = os.path.join(RoothPath.get_root(), 'output.yaml')
+        args.map = os.path.join(RoothPath.get_root(), os.path.join(config['input_path'], str(args.map_name) + config['visual_postfix'],))
+        args.schedule = os.path.join(RoothPath.get_root(), str(args.alpha)+'-'+str(args.map_name))
 
     with open(args.map) as map_file:
         map = yaml.load(map_file, Loader=yaml.FullLoader)
@@ -198,7 +273,7 @@ if __name__ == "__main__":
     with open(args.schedule) as states_file:
         schedule = yaml.load(states_file, Loader=yaml.FullLoader)
 
-    animation = Animation(map, schedule, slow_factor=args.slow_factor)
+    animation = Animation(map, schedule, slow_factor=args.slow_factor,alpha=args.alpha)
 
     #animation.save('TP_k=1_collision.mp4', 1)
 
